@@ -3,9 +3,7 @@ package com.sredis;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 
@@ -16,21 +14,21 @@ public class Application {
 
 		//Setting up application context
 		SpringApplication.run(Application.class, args);
-
-		System.out.println("Logs from your program will appear here!");
-
 		ServerSocket serverSocket = null;
 		Socket clientSocket = null;
 		int port = 6379;
 		try {
 			serverSocket = new ServerSocket(port);
 			serverSocket.setReuseAddress(true);
-			clientSocket = serverSocket.accept();
-			System.out.println("Client connected!");
 
-			DataInputStream dataInputStream = new DataInputStream(clientSocket.getInputStream());
-			DataOutputStream dataOutputStream = new DataOutputStream(clientSocket.getOutputStream());
-			dataOutputStream.writeBytes("+PONG\r\n");
+			while (true) {
+				clientSocket = serverSocket.accept();
+
+				process(clientSocket);
+			}
+
+
+
 
 		} catch (IOException e) {
 			System.out.println("IOException: " + e.getMessage());
@@ -42,6 +40,26 @@ public class Application {
 			} catch (IOException e) {
 				System.out.println("IOException: " + e.getMessage());
 			}
+		}
+	}
+
+	private static void process(Socket clientSocket) {
+		try (BufferedReader reader = new BufferedReader(
+				new InputStreamReader(clientSocket.getInputStream()));
+			 BufferedWriter writer = new BufferedWriter(
+					 new OutputStreamWriter(clientSocket.getOutputStream()));) {
+			String content;
+			while ((content = reader.readLine()) != null) {
+				System.out.println("::" + content);
+				if ("ping".equalsIgnoreCase(content)) {
+					writer.write("+PONG\r\n");
+					writer.flush();
+				} else if ("eof".equalsIgnoreCase(content)) {
+					System.out.println("eof");
+				}
+			}
+		} catch (IOException e) {
+			throw new RuntimeException(e);
 		}
 	}
 
