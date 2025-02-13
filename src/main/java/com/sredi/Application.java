@@ -1,14 +1,8 @@
-package com.sredis;
+package com.sredi;
 
-import com.sredis.Server.ServerCentral;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.sredi.Server.ServerCentral;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.annotation.ComponentScan;
-
-import java.io.*;
-import java.net.ServerSocket;
-import java.net.Socket;
 
 @SpringBootApplication
 public class Application {
