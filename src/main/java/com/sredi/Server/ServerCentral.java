@@ -1,24 +1,24 @@
 package com.sredi.Server;
 
 import com.sredi.Parser.Parser;
-import org.springframework.beans.factory.annotation.Value;
-
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class ServerCentral {
-    private static final ConcurrentHashMap<String, String> keyValueStore = new ConcurrentHashMap<>();
 
-    @Value("${sredi.server.port}")
-    private int port;
+    private static final ConcurrentHashMap<String, String> keyValueStore = new ConcurrentHashMap<>();
+    private static ScheduledExecutorService executorService;
 
     public static void exec() {
-        int port = 6379;
-        try (ServerSocket serverSocket = new ServerSocket(port)) {
+        try (ServerSocket serverSocket = new ServerSocket(6379)) {
             serverSocket.setReuseAddress(true);
+            executorService = Executors.newSingleThreadScheduledExecutor();
 
             while (true) {
                 Socket clientSocket = serverSocket.accept();
@@ -38,12 +38,11 @@ public class ServerCentral {
 
 
     private static void process(Socket clientSocket) {
-        OutputStream out = null;
         InputStream in = null;
         try (OutputStreamWriter osw = new OutputStreamWriter(clientSocket.getOutputStream())) {
             in = clientSocket.getInputStream();
             List<Object> command;
-            while ((command = Parser.parseCommand(in)) != null) {
+            while (!(command = Parser.parseCommand(in)).isEmpty()) {
                 String cmd = (String) command.get(0);
                 switch (cmd.toLowerCase()) {
                     case "ping":
@@ -61,6 +60,16 @@ public class ServerCentral {
                                 key, String.join("\r\n", command.stream().skip(3).toArray(
                                         String[]::new)) +
                                         "\r\n");
+                        if(command.size() == 9) {
+                            String expiry;
+                            if((expiry = (String)command.get(6)).equalsIgnoreCase("PX")) {
+                                long delay = Long.parseLong((String)command.get(8));
+                                String finalCommand = (String) command.get(2);
+                                executorService.schedule(
+                                        () -> keyValueStore.remove(finalCommand), delay, TimeUnit.MILLISECONDS
+                                );
+                            }
+                        }
                         break;
                     case "get":
                         key = (String) command.get(2);
@@ -74,7 +83,6 @@ public class ServerCentral {
             }
         } catch (IOException e) {
             System.out.println("IOException: " + e.getMessage());
-            var error = e.getMessage();
         } finally {
             try {
                 if (in != null) {
