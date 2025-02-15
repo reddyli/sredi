@@ -9,6 +9,6 @@ public class Application {
 	public static void main(String[] args) {
 		//Setting up application context
 		SpringApplication.run(Application.class, args);
-		ServerCentral.exec();
+		ServerCentral.exec(args);
 	}
 }

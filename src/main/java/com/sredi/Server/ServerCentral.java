@@ -13,9 +13,16 @@ import java.util.concurrent.TimeUnit;
 public class ServerCentral {
 
     private static final ConcurrentHashMap<String, String> keyValueStore = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, String> configStore = new ConcurrentHashMap<>();
     private static ScheduledExecutorService executorService;
 
-    public static void exec() {
+    public static void exec(String[] args) {
+
+        if(args.length > 0) {
+            configStore.put("dir", args[0]);
+            configStore.put("dbfilename", args[1]);
+        }
+
         try (ServerSocket serverSocket = new ServerSocket(6379)) {
             serverSocket.setReuseAddress(true);
             executorService = Executors.newSingleThreadScheduledExecutor();
@@ -61,8 +68,7 @@ public class ServerCentral {
                                         String[]::new)) +
                                         "\r\n");
                         if(command.size() == 9) {
-                            String expiry;
-                            if((expiry = (String)command.get(6)).equalsIgnoreCase("PX")) {
+                            if(((String)command.get(6)).equalsIgnoreCase("PX")) {
                                 long delay = Long.parseLong((String)command.get(8));
                                 String finalCommand = (String) command.get(2);
                                 executorService.schedule(
@@ -75,6 +81,19 @@ public class ServerCentral {
                         key = (String) command.get(2);
                         osw.write(keyValueStore.getOrDefault(key, "$-1\r\n"));
                         break;
+                    case "config":
+                        if(((String)command.get(2)).equalsIgnoreCase("GET")) {
+                            String args = (String) command.get(4);
+                            if(args.equalsIgnoreCase("DIR")) {
+                                String dir = configStore.get("dir");
+                                osw.write("*2\r\n$3\r\ndir\r\n$"+dir.length()+ "\r\n" + dir +"\r\n");
+                            } else if(args.equalsIgnoreCase("DBFILENAME")) {
+                                String dbfilename = configStore.get("dbfilename");
+                                osw.write("*2\r\n$3\r\ndbfilename\r\n$"+dbfilename.length()+ "\r\n" + dbfilename +"\r\n");
+                            }
+                            break;
+                        }
+
                     default:
                         return;
                 }
