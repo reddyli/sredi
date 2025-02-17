@@ -1,6 +1,8 @@
 package com.sredi.Server;
 
-import com.sredi.Parser.Parser;
+import com.sredi.Parser.CommandParser;
+import com.sredi.Parser.FileParser;
+
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -13,13 +15,13 @@ import java.util.concurrent.TimeUnit;
 
 public class ServerCentral {
 
-    private static final ConcurrentHashMap<String, String> keyValueStore = new ConcurrentHashMap<>();
+    public static final ConcurrentHashMap<String, String> keyValueStore = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, String> configStore = new ConcurrentHashMap<>();
     private static ScheduledExecutorService executorService;
 
     public static void exec(String[] args) {
 
-        if(args.length > 0) {
+        if (args.length > 0) {
             configStore.put("dir", args[0]);
             configStore.put("dbfilename", args[1]);
         }
@@ -27,89 +29,33 @@ public class ServerCentral {
 
         // Session RDB File
         try {
-        File file = new File(configStore.get("dir"), configStore.get("dbfilename"));
-        if (file.exists()) {
-            InputStream in = new FileInputStream(file);
-            int b;
-            int lengthEncoding;
-            int valueType;
-            byte[] bytes;
-            String key;
-            String value;
-            // skip
-            while ((b = in.read()) != -1) {
-                // do nothing
-                if (b == 0xFB) {
-                    getLength(in);
-                    getLength(in);
-                    break;
+            File file = new File(configStore.get("dir"), configStore.get("dbfilename"));
+            if (file.exists()) {
+                FileParser.parseRDBFile(file);
+            }
+        } catch (Exception e) {}
+
+
+            try (ServerSocket serverSocket = new ServerSocket(6379)) {
+                serverSocket.setReuseAddress(true);
+                executorService = Executors.newSingleThreadScheduledExecutor();
+
+                while (true) {
+                    Socket clientSocket = serverSocket.accept();
+                    new Thread(() -> {
+                        try {
+                            process(clientSocket);
+                        } catch (Exception e) {
+                            throw new RuntimeException(e);
+                        }
+                    }).start();
                 }
+
+            } catch (IOException e) {
+                System.out.println("IOException: " + e.getMessage());
             }
-            System.out.println("skipped");
-            valueType = in.read(); // value-type
-            System.out.println("valueType=" + valueType);
-            // Key
-            lengthEncoding = getLength(in);
-            bytes = in.readNBytes(lengthEncoding);
-            key = new String(bytes);
-            // Value
-            lengthEncoding = getLength(in);
-            bytes = in.readNBytes(lengthEncoding);
-            value = new String(bytes);
-            ServerCentral.keyValueStore.put(key, value);
-        }
-    } catch (Exception e) {
-            System.out.println("error");
         }
 
-
-        try (ServerSocket serverSocket = new ServerSocket(6379)) {
-            serverSocket.setReuseAddress(true);
-            executorService = Executors.newSingleThreadScheduledExecutor();
-
-            while (true) {
-                Socket clientSocket = serverSocket.accept();
-                new Thread(() -> {
-                    try {
-                        process(clientSocket);
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                }).start();
-            }
-
-        } catch (IOException e) {
-            System.out.println("IOException: " + e.getMessage());
-        }
-    }
-
-    private static int getLength(InputStream in) throws IOException {
-        int length = 0;
-        byte b = (byte)in.read();
-        switch (b & 0b11000000) {
-            case 0 -> {
-                length = b & 0b00111111;
-            }
-            case 128 -> {
-                ByteBuffer buffer = ByteBuffer.allocate(2);
-                buffer.put((byte) (b & 00111111));
-                buffer.put((byte) in.read());
-                buffer.rewind();
-                length = buffer.getShort();
-            }
-            case 256 -> {
-                ByteBuffer buffer = ByteBuffer.allocate(4);
-                buffer.put(b);
-                buffer.put(in.readNBytes(3));
-                buffer.rewind();
-                length = buffer.getInt();
-            }
-            case 384 -> {
-                System.out.println("Special format");
-            }
-        }
-        return length;
-    }
 
 
 private static void process(Socket clientSocket) throws IOException {
@@ -117,7 +63,7 @@ private static void process(Socket clientSocket) throws IOException {
         try (OutputStreamWriter osw = new OutputStreamWriter(clientSocket.getOutputStream())) {
             in = clientSocket.getInputStream();
             List<Object> command;
-            while (!(command = Parser.parseCommand(in)).isEmpty()) {
+            while (!(command = CommandParser.parseCommand(in)).isEmpty()) {
                 String cmd = (String) command.get(0);
                 switch (cmd.toLowerCase()) {
                     case "ping":

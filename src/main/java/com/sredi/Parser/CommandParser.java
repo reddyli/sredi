@@ -7,7 +7,7 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Parser {
+public class CommandParser {
 
     public static List<Object> parseCommand(InputStream inputStream) throws IOException {
 
