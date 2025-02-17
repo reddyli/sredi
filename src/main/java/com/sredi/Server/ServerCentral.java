@@ -4,6 +4,7 @@ import com.sredi.Parser.Parser;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -22,6 +23,45 @@ public class ServerCentral {
             configStore.put("dir", args[0]);
             configStore.put("dbfilename", args[1]);
         }
+
+
+        // Session RDB File
+        try {
+        File file = new File(configStore.get("dir"), configStore.get("dbfilename"));
+        if (file.exists()) {
+            InputStream in = new FileInputStream(file);
+            int b;
+            int lengthEncoding;
+            int valueType;
+            byte[] bytes;
+            String key;
+            String value;
+            // skip
+            while ((b = in.read()) != -1) {
+                // do nothing
+                if (b == 0xFB) {
+                    getLength(in);
+                    getLength(in);
+                    break;
+                }
+            }
+            System.out.println("skipped");
+            valueType = in.read(); // value-type
+            System.out.println("valueType=" + valueType);
+            // Key
+            lengthEncoding = getLength(in);
+            bytes = in.readNBytes(lengthEncoding);
+            key = new String(bytes);
+            // Value
+            lengthEncoding = getLength(in);
+            bytes = in.readNBytes(lengthEncoding);
+            value = new String(bytes);
+            ServerCentral.keyValueStore.put(key, value);
+        }
+    } catch (Exception e) {
+            System.out.println("error");
+        }
+
 
         try (ServerSocket serverSocket = new ServerSocket(6379)) {
             serverSocket.setReuseAddress(true);
@@ -43,8 +83,36 @@ public class ServerCentral {
         }
     }
 
+    private static int getLength(InputStream in) throws IOException {
+        int length = 0;
+        byte b = (byte)in.read();
+        switch (b & 0b11000000) {
+            case 0 -> {
+                length = b & 0b00111111;
+            }
+            case 128 -> {
+                ByteBuffer buffer = ByteBuffer.allocate(2);
+                buffer.put((byte) (b & 00111111));
+                buffer.put((byte) in.read());
+                buffer.rewind();
+                length = buffer.getShort();
+            }
+            case 256 -> {
+                ByteBuffer buffer = ByteBuffer.allocate(4);
+                buffer.put(b);
+                buffer.put(in.readNBytes(3));
+                buffer.rewind();
+                length = buffer.getInt();
+            }
+            case 384 -> {
+                System.out.println("Special format");
+            }
+        }
+        return length;
+    }
 
-    private static void process(Socket clientSocket) {
+
+private static void process(Socket clientSocket) throws IOException {
         InputStream in = null;
         try (OutputStreamWriter osw = new OutputStreamWriter(clientSocket.getOutputStream())) {
             in = clientSocket.getInputStream();
@@ -79,7 +147,8 @@ public class ServerCentral {
                         break;
                     case "get":
                         key = (String) command.get(2);
-                        osw.write(keyValueStore.getOrDefault(key, "$-1\r\n"));
+                        String value = keyValueStore.get(key);
+                        osw.write("+" + value + "\r\n");
                         break;
                     case "config":
                         if(((String)command.get(2)).equalsIgnoreCase("GET")) {
@@ -93,6 +162,10 @@ public class ServerCentral {
                             }
                             break;
                         }
+                    case "keys":
+                        String[] keys = keyValueStore.keySet().toArray(new String[0]);
+                        responseList(osw, keys);
+                        break;
 
                     default:
                         return;
@@ -111,6 +184,14 @@ public class ServerCentral {
             } catch (IOException e) {
                 System.out.println("IOException: " + e.getMessage());
             }
+        }
+    }
+
+    private static void responseList(OutputStreamWriter osw, String... values) throws IOException {
+        osw.write("*" + values.length + "\r\n");
+        for (String value : values) {
+            osw.write("$" + value.length() + "\r\n");
+            osw.write(value + "\r\n");
         }
     }
 }
