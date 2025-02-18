@@ -25,17 +25,23 @@ public class FileParser {
             }
         }
         System.out.println("skipped");
-        valueType = in.read(); // value-type
-        System.out.println("valueType=" + valueType);
-        // Key
-        lengthEncoding = getLength(in);
-        bytes = in.readNBytes(lengthEncoding);
-        key = new String(bytes);
-        // Value
-        lengthEncoding = getLength(in);
-        bytes = in.readNBytes(lengthEncoding);
-        value = new String(bytes);
-        ServerCentral.keyValueStore.put(key, value);
+        // value-type
+
+        while( (valueType = in.read()) != -1) {
+            if(valueType == 0xFF) {
+                break;
+            }
+            // Key
+            lengthEncoding = getLength(in);
+            bytes = in.readNBytes(lengthEncoding);
+            key = new String(bytes);
+            // Value
+            lengthEncoding = getLength(in);
+            bytes = in.readNBytes(lengthEncoding);
+            value = new String(bytes);
+            ServerCentral.keyValueStore.put(key, value);
+        }
+
     }
 
     private static int getLength(InputStream in) throws IOException {
