@@ -27,7 +27,6 @@ public class ServerCentral {
         }
 
 
-        // Session RDB File
         try {
             File file = new File(configStore.get("dir"), configStore.get("dbfilename"));
             if (file.exists()) {
