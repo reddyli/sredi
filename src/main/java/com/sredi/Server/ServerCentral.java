@@ -7,6 +7,7 @@ import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -18,24 +19,29 @@ public class ServerCentral {
     public static final ConcurrentHashMap<String, String> keyValueStore = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, String> configStore = new ConcurrentHashMap<>();
     private static ScheduledExecutorService executorService;
+    private static String role = "MASTER";
 
     public static void exec(String[] args) {
 
-        if (args.length > 0) {
-            configStore.put("dir", args[0]);
-            configStore.put("dbfilename", args[1]);
+        int port = 6379;
+
+        List<String> argsList = Arrays.asList(args);
+        if(argsList.contains("--port")) {
+            port = Integer.parseInt(argsList.get(1));
+        }
+        if(argsList.contains("--replicaof")) {
+            role = "REPLICA";
         }
 
-
         try {
-            File file = new File(configStore.get("dir"), configStore.get("dbfilename"));
+            File file = new File(configStore.getOrDefault("dir", "./"), configStore.getOrDefault("dbfilename","sredi.rdb"));
             if (file.exists()) {
                 FileParser.parseRDBFile(file);
             }
         } catch (Exception e) {}
 
 
-            try (ServerSocket serverSocket = new ServerSocket(6379)) {
+            try (ServerSocket serverSocket = new ServerSocket(port)) {
                 serverSocket.setReuseAddress(true);
                 executorService = Executors.newSingleThreadScheduledExecutor();
 
@@ -67,6 +73,13 @@ private static void process(Socket clientSocket) throws IOException {
                 switch (cmd.toLowerCase()) {
                     case "ping":
                         osw.write("+PONG\r\n");
+                        break;
+                    case "metadata":
+                        StringBuilder sb = new StringBuilder();
+                        sb.append("role:").append(role).append("\n");
+                        sb.append("master_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\n");
+                        sb.append("master_repl_offset:0\n");
+                        osw.write(String.format("$%s\r\n%s\r\n", sb.toString().length(), sb));
                         break;
                     case "echo":
                         osw.write(String.join("\r\n", command.stream().skip(1).toArray(
@@ -111,7 +124,6 @@ private static void process(Socket clientSocket) throws IOException {
                         String[] keys = keyValueStore.keySet().toArray(new String[0]);
                         responseList(osw, keys);
                         break;
-
                     default:
                         return;
                 }
@@ -139,4 +151,5 @@ private static void process(Socket clientSocket) throws IOException {
             osw.write(value + "\r\n");
         }
     }
+
 }
