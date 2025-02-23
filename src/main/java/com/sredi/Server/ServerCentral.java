@@ -2,6 +2,7 @@ package com.sredi.Server;
 
 import com.sredi.Parser.CommandParser;
 import com.sredi.Parser.FileParser;
+import com.sredi.Replication.ReplicaHandshake;
 
 import java.io.*;
 import java.net.ServerSocket;
@@ -23,14 +24,25 @@ public class ServerCentral {
 
     public static void exec(String[] args) {
 
-        int port = 6379;
-
+        int port = 0;
         List<String> argsList = Arrays.asList(args);
         if(argsList.contains("--port")) {
             port = Integer.parseInt(argsList.get(1));
         }
         if(argsList.contains("--replicaof")) {
             role = "REPLICA";
+            port = 6379;
+            //INITIATE MASTER HAND-SHAKE FROM REPLICA
+            String masterIP = argsList.get(1);
+            configStore.put("masterIP",masterIP );
+            String masterPort = argsList.get(2);
+            configStore.put("masterPort", masterPort);
+            try {
+                ReplicaHandshake.replicaHandshake(masterIP, Integer.parseInt(masterPort));
+            } catch (Exception e) {
+                System.out.println("ReplicaHandshake failed" + e.getMessage());
+            }
+            System.out.println(argsList.toString());
         }
 
         try {
