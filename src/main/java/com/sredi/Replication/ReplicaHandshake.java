@@ -7,7 +7,7 @@ import java.nio.charset.StandardCharsets;
 
 public class ReplicaHandshake {
 
-    public static void replicaHandshake(String hostname, int masterPortNumber)
+    public static void replicate(String hostname, int masterPortNumber)
             throws IOException {
         try {
             Socket replicaSocket =
@@ -16,6 +16,10 @@ public class ReplicaHandshake {
             String handShakeMsg = "*1\r\n$4\r\nping\r\n";
             output.write(handShakeMsg.getBytes(StandardCharsets.UTF_8));
             output.flush();
+            /* Plan after PING
+            * 1. 2 x REPLCONF
+            * 2. 1 x PSYNC ID + OFFSET
+            * */
             System.out.println("Handshake sent");
         } catch (IOException e) {
             e.printStackTrace();

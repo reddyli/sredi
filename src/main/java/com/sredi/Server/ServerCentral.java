@@ -7,7 +7,6 @@ import com.sredi.Replication.ReplicaHandshake;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -38,7 +37,7 @@ public class ServerCentral {
             String masterPort = argsList.get(2);
             configStore.put("masterPort", masterPort);
             try {
-                ReplicaHandshake.replicaHandshake(masterIP, Integer.parseInt(masterPort));
+                ReplicaHandshake.replicate(masterIP, Integer.parseInt(masterPort));
             } catch (Exception e) {
                 System.out.println("ReplicaHandshake failed" + e.getMessage());
             }
