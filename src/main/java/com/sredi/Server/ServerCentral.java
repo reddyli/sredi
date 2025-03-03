@@ -20,176 +20,192 @@ public class ServerCentral {
     private static final BlockingQueue<String> replicationCommandQueue = new LinkedBlockingQueue<>();
     private static ScheduledExecutorService executorService;
     private static String role = "MASTER";
-    private static String MASTER_REPL_ID = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb";
+    private static final String MASTER_REPL_ID = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb";
     private static int MASTER_REPL_OFFSET = 0;
 
     public static void exec(String[] args) {
+        int port = parseArguments(args);
+        loadConfiguration();
 
+        try (ServerSocket serverSocket = new ServerSocket(port)) {
+            serverSocket.setReuseAddress(true);
+            executorService = Executors.newSingleThreadScheduledExecutor();
+            ExecutorService clientProcessingPool = Executors.newFixedThreadPool(10);
+
+            while (true) {
+                Socket clientSocket = serverSocket.accept();
+                clientProcessingPool.submit(() -> {
+                    try {
+                        process(clientSocket);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+            }
+        } catch (IOException e) {
+            System.out.println("IOException: " + e.getMessage());
+        }
+    }
+
+    private static int parseArguments(String[] args) {
         int port = 0;
         List<String> argsList = Arrays.asList(args);
-        if(argsList.contains("--port")) {
+        if (argsList.contains("--port")) {
             port = Integer.parseInt(argsList.get(1));
         }
-        if(argsList.contains("--replicaof")) {
+        if (argsList.contains("--replicaof")) {
             role = "REPLICA";
             port = 6379;
-            //INITIATE MASTER HAND-SHAKE FROM REPLICA
             String masterIP = argsList.get(1);
-            configStore.put("masterIP",masterIP );
+            configStore.put("masterIP", masterIP);
             String masterPort = argsList.get(2);
             configStore.put("masterPort", masterPort);
             try {
-
-                // Current status is set to full replication
                 ReplicaHandshake.replicate(masterIP, Integer.parseInt(masterPort));
             } catch (Exception e) {
-                System.out.println("ReplicaHandshake failed" + e.getMessage());
+                System.out.println("ReplicaHandshake failed: " + e.getMessage());
             }
-            System.out.println(argsList.toString());
         }
+        return port;
+    }
 
+    private static void loadConfiguration() {
         try {
-            File file = new File(configStore.getOrDefault("dir", "./"), configStore.getOrDefault("dbfilename","sredi.rdb"));
+            File file = new File(configStore.getOrDefault("dir", "./"), configStore.getOrDefault("dbfilename", "sredi.rdb"));
             if (file.exists()) {
                 FileParser.parseRDBFile(file);
             }
-        } catch (Exception e) {}
-
-
-            try (ServerSocket serverSocket = new ServerSocket(port)) {
-                serverSocket.setReuseAddress(true);
-                executorService = Executors.newSingleThreadScheduledExecutor();
-
-                while (true) {
-                    Socket clientSocket = serverSocket.accept();
-                    new Thread(() -> {
-                        try {
-                            process(clientSocket);
-                        } catch (Exception e) {
-                            throw new RuntimeException(e);
-                        }
-                    }).start();
-                }
-
-            } catch (IOException e) {
-                System.out.println("IOException: " + e.getMessage());
-            }
+        } catch (Exception e) {
+            System.out.println("Error loading configuration: " + e.getMessage());
         }
+    }
 
-
-
-private static void process(Socket clientSocket) throws IOException {
-        InputStream in = null;
-        try (OutputStreamWriter osw = new OutputStreamWriter(clientSocket.getOutputStream())) {
-            in = clientSocket.getInputStream();
+    private static void process(Socket clientSocket) throws IOException {
+        try (InputStream in = clientSocket.getInputStream();
+             OutputStreamWriter osw = new OutputStreamWriter(clientSocket.getOutputStream())) {
             List<Object> command;
             while (!(command = CommandParser.parseCommand(in)).isEmpty()) {
-                String cmd = (String) command.get(0);
-                switch (cmd.toLowerCase()) {
-                    case "ping":
-                        osw.write("+PONG\r\n");
-                        break;
-                    case "metadata":
-                        StringBuilder sb = new StringBuilder();
-                        sb.append("role:").append(role).append("\n");
-                        sb.append("MASTER_REPL_ID:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\n");
-                        sb.append("master_repl_offset:0\n");
-                        osw.write(String.format("$%s\r\n%s\r\n", sb.toString().length(), sb));
-                        break;
-                    case "echo":
-                        osw.write(String.join("\r\n", command.stream().skip(1).toArray(
-                                String[]::new)) +
-                                "\r\n");
-                        break;
-                    case "replconf":
-                        osw.write("+OK\r\n");
-                        break;
-                    case "set":
-                        osw.write("+OK\r\n");
-                        String key = (String) command.get(2);
-
-
-                        //replicate synchronously for now
-                        StringBuilder respArray = new StringBuilder();
-                        for (Object s : command) {
-                            respArray.append((String) s).append("\r\n");
-                        }
-                        replicationCommandQueue.add(respArray.toString());
-
-                        keyValueStore.put(
-                                key, String.join("\r\n", command.stream().skip(3).toArray(
-                                        String[]::new)) +
-                                        "\r\n");
-                        if(command.size() == 9) {
-                            if(((String)command.get(6)).equalsIgnoreCase("PX")) {
-                                long delay = Long.parseLong((String)command.get(8));
-                                String finalCommand = (String) command.get(2);
-                                executorService.schedule(
-                                        () -> keyValueStore.remove(finalCommand), delay, TimeUnit.MILLISECONDS
-                                );
-                            }
-                        }
-                        break;
-                    case "get":
-                        key = (String) command.get(2);
-                        String value = keyValueStore.get(key);
-                        osw.write("+" + value + "\r\n");
-                        break;
-                    case "config":
-                        if(((String)command.get(2)).equalsIgnoreCase("GET")) {
-                            String args = (String) command.get(4);
-                            if(args.equalsIgnoreCase("DIR")) {
-                                String dir = configStore.get("dir");
-                                osw.write("*2\r\n$3\r\ndir\r\n$"+dir.length()+ "\r\n" + dir +"\r\n");
-                            } else if(args.equalsIgnoreCase("DBFILENAME")) {
-                                String dbfilename = configStore.get("dbfilename");
-                                osw.write("*2\r\n$3\r\ndbfilename\r\n$"+dbfilename.length()+ "\r\n" + dbfilename +"\r\n");
-                            }
-                            break;
-                        }
-                    case "keys":
-                        String[] keys = keyValueStore.keySet().toArray(new String[0]);
-                        responseList(osw, keys);
-                        break;
-                    case "psync":
-                        osw.write("+FULLRESYNC %s 0\r\n".formatted(MASTER_REPL_ID));
-                        byte[] contents = HexFormat.of().parseHex(
-                                "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2");
-                        osw.write("$" + contents.length + "\r\n");
-                        try {
-                            while (true) {
-                                String element = replicationCommandQueue.take();
-                                osw.write(element);
-                            }
-                        } catch (InterruptedException e) {
-                            throw new RuntimeException(e);
-                        }
-
-                    case "info":
-                        List<String> kvps = new ArrayList<>();
-                        kvps.add("role:" + role);
-                        if (role.equals("MASTER")) {
-                            kvps.add("MASTER_REPL_ID:" + MASTER_REPL_ID);
-                            kvps.add("master_repl_offset:" + MASTER_REPL_OFFSET);
-                        }
-                    default:
-                        return;
-                }
+                handleCommand(command, osw);
                 osw.flush();
-
             }
         } catch (IOException e) {
             System.out.println("IOException: " + e.getMessage());
         } finally {
-            try {
-                if (in != null) {
-                    in.close();
-                    clientSocket.close();
-                }
-            } catch (IOException e) {
-                System.out.println("IOException: " + e.getMessage());
+            clientSocket.close();
+        }
+    }
+
+    private static void handleCommand(List<Object> command, OutputStreamWriter osw) throws IOException {
+        String cmd = (String) command.get(0);
+        switch (cmd.toLowerCase()) {
+            case "ping":
+                osw.write("+PONG\r\n");
+                break;
+            case "metadata":
+                handleMetadataCommand(osw);
+                break;
+            case "echo":
+                handleEchoCommand(command, osw);
+                break;
+            case "replconf":
+                osw.write("+OK\r\n");
+                break;
+            case "set":
+                handleSetCommand(command, osw);
+                break;
+            case "get":
+                handleGetCommand(command, osw);
+                break;
+            case "config":
+                handleConfigCommand(command, osw);
+                break;
+            case "keys":
+                handleKeysCommand(osw);
+                break;
+            case "psync":
+                handlePsyncCommand(osw);
+                break;
+            case "info":
+                handleInfoCommand(osw);
+                break;
+            default:
+                osw.write("-ERR unknown command\r\n");
+        }
+    }
+
+    private static void handleMetadataCommand(OutputStreamWriter osw) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        sb.append("role:").append(role).append("\n");
+        sb.append("MASTER_REPL_ID:").append(MASTER_REPL_ID).append("\n");
+        sb.append("master_repl_offset:").append(MASTER_REPL_OFFSET).append("\n");
+        osw.write(String.format("$%s\r\n%s\r\n", sb.toString().length(), sb));
+    }
+
+    private static void handleEchoCommand(List<Object> command, OutputStreamWriter osw) throws IOException {
+        osw.write(String.join("\r\n", command.stream().skip(1).toArray(String[]::new)) + "\r\n");
+    }
+
+    private static void handleSetCommand(List<Object> command, OutputStreamWriter osw) throws IOException {
+        osw.write("+OK\r\n");
+        String key = (String) command.get(2);
+        StringBuilder respArray = new StringBuilder();
+        for (Object s : command) {
+            respArray.append((String) s).append("\r\n");
+        }
+        replicationCommandQueue.add(respArray.toString());
+        keyValueStore.put(key, String.join("\r\n", command.stream().skip(3).toArray(String[]::new)) + "\r\n");
+        if (command.size() == 9 && ((String) command.get(6)).equalsIgnoreCase("PX")) {
+            long delay = Long.parseLong((String) command.get(8));
+            executorService.schedule(() -> keyValueStore.remove(key), delay, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    private static void handleGetCommand(List<Object> command, OutputStreamWriter osw) throws IOException {
+        String key = (String) command.get(2);
+        String value = keyValueStore.get(key);
+        osw.write("+" + value + "\r\n");
+    }
+
+    private static void handleConfigCommand(List<Object> command, OutputStreamWriter osw) throws IOException {
+        if (((String) command.get(2)).equalsIgnoreCase("GET")) {
+            String args = (String) command.get(4);
+            if (args.equalsIgnoreCase("DIR")) {
+                String dir = configStore.get("dir");
+                osw.write("*2\r\n$3\r\ndir\r\n$" + dir.length() + "\r\n" + dir + "\r\n");
+            } else if (args.equalsIgnoreCase("DBFILENAME")) {
+                String dbfilename = configStore.get("dbfilename");
+                osw.write("*2\r\n$3\r\ndbfilename\r\n$" + dbfilename.length() + "\r\n" + dbfilename + "\r\n");
             }
         }
+    }
+
+    private static void handleKeysCommand(OutputStreamWriter osw) throws IOException {
+        String[] keys = keyValueStore.keySet().toArray(new String[0]);
+        responseList(osw, keys);
+    }
+
+    private static void handlePsyncCommand(OutputStreamWriter osw) throws IOException {
+        osw.write("+FULLRESYNC " + MASTER_REPL_ID + " 0\r\n");
+        byte[] contents = HexFormat.of().parseHex("524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2");
+        osw.write("$" + contents.length + "\r\n");
+        try {
+            while (true) {
+                String element = replicationCommandQueue.take();
+                osw.write(element);
+            }
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static void handleInfoCommand(OutputStreamWriter osw) throws IOException {
+        List<String> kvps = new ArrayList<>();
+        kvps.add("role:" + role);
+        if (role.equals("MASTER")) {
+            kvps.add("MASTER_REPL_ID:" + MASTER_REPL_ID);
+            kvps.add("master_repl_offset:" + MASTER_REPL_OFFSET);
+        }
+        responseList(osw, kvps.toArray(new String[0]));
     }
 
     private static void responseList(OutputStreamWriter osw, String... values) throws IOException {
@@ -199,5 +215,4 @@ private static void process(Socket clientSocket) throws IOException {
             osw.write(value + "\r\n");
         }
     }
-
 }
