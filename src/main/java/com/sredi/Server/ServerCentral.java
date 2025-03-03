@@ -7,19 +7,21 @@ import com.sredi.Replication.ReplicaHandshake;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HexFormat;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 public class ServerCentral {
 
     public static final ConcurrentHashMap<String, String> keyValueStore = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, String> configStore = new ConcurrentHashMap<>();
+    private static final BlockingQueue<String> replicationCommandQueue = new LinkedBlockingQueue<>();
     private static ScheduledExecutorService executorService;
     private static String role = "MASTER";
+    private static String MASTER_REPL_ID = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb";
+    private static int MASTER_REPL_OFFSET = 0;
 
     public static void exec(String[] args) {
 
@@ -37,6 +39,8 @@ public class ServerCentral {
             String masterPort = argsList.get(2);
             configStore.put("masterPort", masterPort);
             try {
+
+                // Current status is set to full replication
                 ReplicaHandshake.replicate(masterIP, Integer.parseInt(masterPort));
             } catch (Exception e) {
                 System.out.println("ReplicaHandshake failed" + e.getMessage());
@@ -88,7 +92,7 @@ private static void process(Socket clientSocket) throws IOException {
                     case "metadata":
                         StringBuilder sb = new StringBuilder();
                         sb.append("role:").append(role).append("\n");
-                        sb.append("master_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\n");
+                        sb.append("MASTER_REPL_ID:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\n");
                         sb.append("master_repl_offset:0\n");
                         osw.write(String.format("$%s\r\n%s\r\n", sb.toString().length(), sb));
                         break;
@@ -97,9 +101,21 @@ private static void process(Socket clientSocket) throws IOException {
                                 String[]::new)) +
                                 "\r\n");
                         break;
+                    case "replconf":
+                        osw.write("+OK\r\n");
+                        break;
                     case "set":
                         osw.write("+OK\r\n");
                         String key = (String) command.get(2);
+
+
+                        //replicate synchronously for now
+                        StringBuilder respArray = new StringBuilder();
+                        for (Object s : command) {
+                            respArray.append((String) s).append("\r\n");
+                        }
+                        replicationCommandQueue.add(respArray.toString());
+
                         keyValueStore.put(
                                 key, String.join("\r\n", command.stream().skip(3).toArray(
                                         String[]::new)) +
@@ -135,6 +151,27 @@ private static void process(Socket clientSocket) throws IOException {
                         String[] keys = keyValueStore.keySet().toArray(new String[0]);
                         responseList(osw, keys);
                         break;
+                    case "psync":
+                        osw.write("+FULLRESYNC %s 0\r\n".formatted(MASTER_REPL_ID));
+                        byte[] contents = HexFormat.of().parseHex(
+                                "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2");
+                        osw.write("$" + contents.length + "\r\n");
+                        try {
+                            while (true) {
+                                String element = replicationCommandQueue.take();
+                                osw.write(element);
+                            }
+                        } catch (InterruptedException e) {
+                            throw new RuntimeException(e);
+                        }
+
+                    case "info":
+                        List<String> kvps = new ArrayList<>();
+                        kvps.add("role:" + role);
+                        if (role.equals("MASTER")) {
+                            kvps.add("MASTER_REPL_ID:" + MASTER_REPL_ID);
+                            kvps.add("master_repl_offset:" + MASTER_REPL_OFFSET);
+                        }
                     default:
                         return;
                 }
