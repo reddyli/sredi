@@ -163,7 +163,7 @@ public class ServerCentral {
     private static void handleGetCommand(List<Object> command, OutputStreamWriter osw) throws IOException {
         String key = (String) command.get(2);
         String value = keyValueStore.get(key);
-        osw.write("+" + value + "\r\n");
+        osw.write(value);
     }
 
     private static void handleConfigCommand(List<Object> command, OutputStreamWriter osw) throws IOException {
@@ -186,16 +186,9 @@ public class ServerCentral {
 
     private static void handlePsyncCommand(OutputStreamWriter osw) throws IOException {
         osw.write("+FULLRESYNC " + MASTER_REPL_ID + " 0\r\n");
+        //IDEALLY SEND BACK AN RDB FILE HERE
         byte[] contents = HexFormat.of().parseHex("524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2");
         osw.write("$" + contents.length + "\r\n");
-        try {
-            while (true) {
-                String element = replicationCommandQueue.take();
-                osw.write(element);
-            }
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
     }
 
     private static void handleInfoCommand(OutputStreamWriter osw) throws IOException {
