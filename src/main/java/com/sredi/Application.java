@@ -1,14 +1,28 @@
 package com.sredi;
 
-import com.sredi.Server.ServerCentral;
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
+import java.io.IOException;
 
-@SpringBootApplication
+import com.sredi.utils.ConnectionThread;
+import com.sredi.utils.ConnectionUtil;
+import lombok.extern.slf4j.Slf4j;
+
+import static com.sredi.Setup.init;
+import static com.sredi.Setup.initReplica;
+
+
+@Slf4j
 public class Application {
-	public static void main(String[] args) {
-		//Setting up application context
-		SpringApplication.run(Application.class, args);
-		ServerCentral.exec(args);
+	public static void main(String[] args) throws IOException {
+
+		var portNumber = init(args);
+		var serverSocket = ConnectionUtil.createServerSocket(portNumber);
+
+		initReplica();
+
+		while (true) {
+			var clientSocket = serverSocket.accept();
+			var ClientThread = new ConnectionThread(clientSocket);
+			ClientThread.start();
+		}
 	}
 }
