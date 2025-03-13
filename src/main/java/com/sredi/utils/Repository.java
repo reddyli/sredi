@@ -5,16 +5,17 @@ import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class Repository {
-	private static final Map<String, String> KEY_VALUE_STORE = new HashMap<>();
-	private static final Map<String, Long> SREDI_EXPIRY_MAP = new HashMap<>();
-	private static final Map<String, String> SREDI_CONFIG_MAP = new HashMap<>();
-	private static final Map<String, String> SREDI_REPLICATION_INFO_MAP = new HashMap<>();
-	private static final Map<String, List<String>> SREDI_REPLICATION_CONFIG_MAP = new HashMap<>();
+	private static final ConcurrentHashMap<String, String> KEY_VALUE_STORE = new ConcurrentHashMap<>();
+	private static final ConcurrentHashMap<String, Long> SREDI_EXPIRY_MAP = new ConcurrentHashMap<>();
+	private static final ConcurrentHashMap<String, String> SREDI_CONFIG_MAP = new ConcurrentHashMap<>();
+	private static final ConcurrentHashMap<String, String> SREDI_REPLICATION_INFO_MAP = new ConcurrentHashMap<>();
+	private static final ConcurrentHashMap<String, List<String>> SREDI_REPLICATION_CONFIG_MAP = new ConcurrentHashMap<>();
 
 	public static String get(String key) {
 		if (SREDI_EXPIRY_MAP.containsKey(key)) {

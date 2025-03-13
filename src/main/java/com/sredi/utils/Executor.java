@@ -119,7 +119,6 @@ public class Executor {
 		var value = args.get(1);
 		var expireTime = new AtomicLong(-1L);
 
-		// TODO: if need more options, extract separate method... maybe?
 		if (args.size() >= 4) {
 			if ("px".equalsIgnoreCase(args.get(2))) {
 				var milliseconds = Long.parseLong(args.get(3));
