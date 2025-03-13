@@ -7,7 +7,7 @@ import com.sredi.replication.ReplicationConstants;
 import com.sredi.replication.ReplicationRole;
 import com.sredi.replication.WorkerConnectionProvider;
 import com.sredi.utils.Constant;
-import com.sredi.utils.Repository;
+import com.sredi.store.Repository;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;

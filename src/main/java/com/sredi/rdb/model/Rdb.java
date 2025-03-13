@@ -1,6 +1,6 @@
 package com.sredi.rdb.model;
 
-import com.sredi.utils.Repository;
+import com.sredi.store.Repository;
 
 import java.util.List;
 

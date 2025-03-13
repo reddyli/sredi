@@ -12,6 +12,7 @@ import java.util.stream.Stream;
 import com.sredi.common.SocketOperations;
 import com.sredi.rdb.RdbUtil;
 import com.sredi.replication.MasterConnectionHolder;
+import com.sredi.store.Repository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -84,6 +85,7 @@ public class Executor {
 			case REPLCONF -> replconf(restParams);
 			case PSYNC -> psync(restParams);
 			case WAIT -> wait(restParams);
+			case TYPE -> type(restParams);
 		};
 	}
 
@@ -242,5 +244,11 @@ public class Executor {
 		var timeLimit = Integer.parseInt(args.getLast());
 
 		return ResultData.getSimpleResultData(DataType.INTEGER, String.valueOf(MasterConnectionHolder.getFullySyncedReplicaCount(needReplica, timeLimit)));
+	}
+
+	private List<ResultData> type(List<String> args) {
+		var key = args.getFirst();
+		var type = Repository.getType(key);
+		return ResultData.getSimpleResultData(DataType.SIMPLE_STRINGS, type.toLowerCase());
 	}
 }

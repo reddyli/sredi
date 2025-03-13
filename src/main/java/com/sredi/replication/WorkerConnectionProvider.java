@@ -4,7 +4,7 @@ import com.sredi.common.Pair;
 import com.sredi.common.SocketOperations;
 import com.sredi.utils.Command;
 import com.sredi.utils.Executor;
-import com.sredi.utils.Repository;
+import com.sredi.store.Repository;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.BufferedReader;

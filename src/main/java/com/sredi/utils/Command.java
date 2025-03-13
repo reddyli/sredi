@@ -17,6 +17,7 @@ public enum Command {
 	DEL(true, true),
 	CONFIG(true, false),
 	KEYS(true, false),
+	TYPE(true, false),
 
 	// Replication Command
 	INFO(true, false),

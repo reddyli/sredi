@@ -1,8 +1,7 @@
-package com.sredi.utils;
+package com.sredi.store;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,6 +28,11 @@ public class Repository {
 		}
 
 		return KEY_VALUE_STORE.getOrDefault(key, null);
+	}
+
+	public static String getType(String key) {
+		var value = KEY_VALUE_STORE.get(key);
+		return value.getClass().getSimpleName();
 	}
 
 	public static List<String> getKeys() {
