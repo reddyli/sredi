@@ -1,16 +1,12 @@
 package org.sredi.setup;
 
-import java.io.File;
-
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.CommandLineParser;
-import org.apache.commons.cli.DefaultParser;
-import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.Option;
-import org.apache.commons.cli.Options;
-import org.apache.commons.cli.ParseException;
+import lombok.Getter;
+import org.apache.commons.cli.*;
 import org.sredi.constants.ReplicationConstants;
 
+import java.io.File;
+
+@Getter
 public class SetupOptions {
     private int port = ReplicationConstants.DEFAULT_PORT;
     private String role = ReplicationConstants.MASTER;
@@ -20,34 +16,43 @@ public class SetupOptions {
     private String dbfilename = null;
 
     public boolean parseArgs(String[] args) {
-        // Define the options
+        // Apache Commons CLI Util
         Options options = new Options();
 
-        Option portOption = Option.builder().longOpt("port").hasArg(true)
-                .desc("The port number to use").required(false) // Make this option optional
-                .type(Number.class).build();
+        Option portOption = Option.builder()
+                .longOpt("port")
+                .hasArg(true)
+                .desc("The port number to use")
+                .required(false).type(Number.class)
+                .build();
+
+        Option replicaofOption = Option.builder()
+                .longOpt("replicaof")
+                .numberOfArgs(2)
+                .desc("The host and port of the replica")
+                .required(false)
+                .build();
+
+        Option dirOption = Option.builder()
+                .longOpt("dir")
+                .hasArg(true)
+                .desc("The directory where RDB files are stored")
+                .required(false)
+                .build();
+
+        Option dbfilenameOption = Option.builder()
+                .longOpt("dbfilename")
+                .hasArg(true)
+                .valueSeparator(' ')
+                .desc("The name of the RDB file")
+                .required(false)
+                .build();
+
         options.addOption(portOption);
-
-        Option replicaofOption = Option.builder().longOpt("replicaof").numberOfArgs(2)
-                .desc("The host and port of the replica").required(false) // Make this option
-                                                                          // optional
-                .build();
         options.addOption(replicaofOption);
-
-        Option dirOption = Option.builder().longOpt("dir").hasArg(true)
-                .desc("The directory where RDB files are stored").required(false) // Make this
-                                                                                  // option optional
-                .build();
         options.addOption(dirOption);
-
-        Option dbfilenameOption = Option.builder().longOpt("dbfilename").hasArg(true)
-                .valueSeparator(' ').desc("The name of the RDB file").required(false) // Make this
-                                                                                      // option
-                                                                                      // optional
-                .build();
         options.addOption(dbfilenameOption);
 
-        // Create a parser and parse the command line arguments
         CommandLineParser parser = new DefaultParser();
         try {
             CommandLine cmd = parser.parse(options, args);
@@ -67,11 +72,9 @@ public class SetupOptions {
                 String[] replicaofStrings = cmd.getOptionValues("replicaof");
                 replicaof = replicaofStrings[0];
                 replicaofPort = Integer.parseInt(replicaofStrings[1]);
-                System.out.println(
-                        "Replicaof specified: " + getReplicaof() + " " + getReplicaofPort());
+                System.out.println("Replicaof specified: " + getReplicaof() + " " + getReplicaofPort());
                 if (replicaofPort <= 0 || replicaofPort > 65535) {
-                    throw new ParseException(
-                            "Port must be less than or equal to 65535: " + replicaofPort);
+                    throw new ParseException("Port must be less than or equal to 65535: " + replicaofPort);
                 }
 
                 role = ReplicationConstants.REPLICA;
@@ -94,8 +97,6 @@ public class SetupOptions {
 
         } catch (ParseException e) {
             System.err.println("Parsing failed. Reason: " + e.getMessage());
-
-            // Automatically generate the help statement
             HelpFormatter formatter = new HelpFormatter();
             formatter.printHelp("SetupOptions", options);
             return false;
@@ -105,38 +106,13 @@ public class SetupOptions {
 
     public String getConfigValue(String config) {
         return switch (config) {
-        case "port" -> String.valueOf(port);
-        case "role" -> role;
-        case "replicaof" -> replicaof + " " + replicaofPort;
-        case "dir" -> dir;
-        case "dbfilename" -> dbfilename;
-        default -> null;
+            case "port" -> String.valueOf(port);
+            case "role" -> role;
+            case "replicaof" -> replicaof + " " + replicaofPort;
+            case "dir" -> dir;
+            case "dbfilename" -> dbfilename;
+            default -> null;
         };
-    }
-
-    public int getPort() {
-        return port;
-
-    }
-
-    public String getRole() {
-        return role;
-    }
-
-    public String getReplicaof() {
-        return replicaof;
-    }
-
-    public int getReplicaofPort() {
-        return replicaofPort;
-    }
-
-    public String getDir() {
-        return dir;
-    }
-
-    public String getDbfilename() {
-        return dbfilename;
     }
 
 }

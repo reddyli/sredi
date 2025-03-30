@@ -7,7 +7,7 @@ import java.time.Clock;
 
 public class Server implements Runnable {
     SetupOptions options;
-    CentralRepository service = null;
+    CentralRepository repository = null;
 
     public Server(String... args) {
         options = new SetupOptions();
@@ -21,16 +21,16 @@ public class Server implements Runnable {
     }
 
     public void terminate() {
-        if (service != null) {
-            service.terminate();
+        if (repository != null) {
+            repository.terminate();
         }
     }
 
     public void run() {
-        service = CentralRepository.newInstance(options, Clock.systemUTC());
+        repository = CentralRepository.newInstance(options, Clock.systemUTC());
         try {
-            service.start();
-            service.runCommandLoop();
+            repository.start();
+            repository.runCommandLoop();
             System.out.println(String.format("Event loop terminated"));
 
         } catch (IOException e) {
@@ -38,8 +38,8 @@ public class Server implements Runnable {
         } catch (InterruptedException e) {
             System.out.println("InterruptedException: " + e.getMessage());
         } finally {
-            service.shutdown();
-            service = null;
+            repository.shutdown();
+            repository = null;
         }
     }
 

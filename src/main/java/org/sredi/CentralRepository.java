@@ -54,7 +54,7 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
             case ReplicationConstants.REPLICA -> new FollowerService(options, clock);
             case ReplicationConstants.MASTER -> new LeaderService(options, clock);
         default -> throw new UnsupportedOperationException(
-                "Unexpected role type for new Redis service: " + role);
+                "Unexpected role type for new Redis repository: " + role);
         };
     }
 
@@ -261,7 +261,7 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
             long startBytesOffset);
 
     /**
-     * Wait until replication has caught up for the given number of replicas. The service must block
+     * Wait until replication has caught up for the given number of replicas. The repository must block
      * on this method until either the number of requested replicas has been reached or the timeout
      * has been reached.
      * 
@@ -282,7 +282,7 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
 
     public byte[] psyncRdb(Map<String, RespValue> optionsMap) {
         // TODO make this abstract once leader and follower both override this method
-        throw new UnsupportedOperationException("no psync rdb implementation for the service");
+        throw new UnsupportedOperationException("no psync rdb implementation for the repository");
     }
 
     public void runCommandLoop() throws InterruptedException {

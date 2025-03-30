@@ -7,6 +7,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.BiFunction;
 
+import lombok.Getter;
 import org.sredi.commands.PingCommand;
 import org.sredi.commands.PsyncCommand;
 import org.sredi.commands.RedisCommand;
@@ -23,6 +24,7 @@ public class ConnectionToLeader {
     private final ExecutorService executor;
     private final RespValueParser valueParser;
     private volatile boolean done = false;
+    @Getter
     private long handshakeBytesReceived = 0;
     private RespBulkString fullResyncRdb;
 
@@ -46,10 +48,6 @@ public class ConnectionToLeader {
                 terminate();
             }
         });
-    }
-
-    public long getHandshakeBytesReceived() {
-        return handshakeBytesReceived;
     }
 
     public void startHandshake() {
@@ -123,7 +121,7 @@ public class ConnectionToLeader {
         while (!done) {
             if (leaderConnection.isClosed()) {
                 System.out.println(String.format(
-                        "Terminating service due to connection is closed by leader during handshake: %s",
+                        "Terminating repository due to connection is closed by leader during handshake: %s",
                         leaderConnection));
                 terminate();
                 continue;

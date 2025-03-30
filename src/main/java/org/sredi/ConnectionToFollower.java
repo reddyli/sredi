@@ -2,21 +2,18 @@ package org.sredi;
 
 import java.io.IOException;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.sredi.commands.ReplConfCommand;
 import org.sredi.resp.RespSimpleStringValue;
 import org.sredi.resp.RespValue;
 
 public class ConnectionToFollower {
     private final LeaderService service;
+    @Getter
     private final ClientConnection followerConnection;
 
-    /**
-     * WORKAROUND for codecrafters integration test "replication-17" Stage 17 expects our service to
-     * not send a REPLCONF to the followers during the WAIT command. But, Stage 18 expects it to be
-     * sent and we need to wait for the ACK. So, in order to support Stage17 test, we will skip
-     * waiting. The test replicas don't respond to the GETACK, but the service needs to respond
-     * immediately to pass test replication-17.
-     **/
+    @Setter
     private volatile boolean testingDontWaitForAck = true;
 
     public ConnectionToFollower(LeaderService service, ClientConnection followerConnection)
@@ -27,20 +24,6 @@ public class ConnectionToFollower {
 
     public long getTotalReplicationOffset() {
         return service.getTotalReplicationOffset();
-    }
-
-    public ClientConnection getFollowerConnection() {
-        return followerConnection;
-    }
-
-    /**
-     * Caller can set this when it wants to start waiting for a ACK response. For codecrafters
-     * integration test, this means tests that first have replicated commands.
-     * 
-     * @param testingDontWaitForAck
-     */
-    public void setTestingDontWaitForAck(boolean testingDontWaitForAck) {
-        this.testingDontWaitForAck = testingDontWaitForAck;
     }
 
     public RespValue sendAndWaitForReplConfAck(long timeoutMillis) throws IOException, InterruptedException {
