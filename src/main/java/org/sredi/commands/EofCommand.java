@@ -1,7 +1,7 @@
-package org.sredi;
-import org.sredi.commands.RedisCommand;
+package org.sredi.commands;
+import org.sredi.storage.CentralRepository;
 
-public class EofCommand extends RedisCommand {
+public class EofCommand extends Command {
 
     public EofCommand() {
         super(Type.EOF);

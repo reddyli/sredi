@@ -1,4 +1,4 @@
-package org.sredi;
+package org.sredi.replication;
 
 import java.io.IOException;
 import java.util.Deque;
@@ -17,12 +17,7 @@ public class ConnectionManager {
     private final Deque<ClientConnection> clientSockets = new ConcurrentLinkedDeque<>();
     private final Map<ClientConnection, Queue<RespValue>> clientValues = new ConcurrentHashMap<>();
 
-    public ConnectionManager() {
-
-    }
-
     public void start(ExecutorService executorService) throws IOException {
-        // TODO implement orderly shutdown for this thread
         executorService.submit(() -> {
             for (;;) {
                 boolean didRead = false;
@@ -72,17 +67,14 @@ public class ConnectionManager {
     }
 
     public void addPriorityConnection(ClientConnection priorityConnection) {
-        // for followers that listen to a leader, the leader connection should be the first
-        // connection in the queue so getNextValue will prioritize replication commands
-        // from the leader before commands from other clients
         clientSockets.addFirst(priorityConnection);
     }
 
     public void closeAllConnections() {
         for (ClientConnection conn : clientSockets) {
             try {
-                System.out.println(String.format("Closing connection to client: %s, opened: %s",
-                        conn, !conn.isClosed()));
+                System.out.printf("Closing connection to client: %s, opened: %s%n",
+                        conn, !conn.isClosed());
                 if (!conn.isClosed()) {
                     conn.close();
                 }
@@ -109,9 +101,8 @@ public class ConnectionManager {
                     foundValue = true;
                 }
             } catch (Exception e) {
-                System.out.println(
-                        String.format("ConnectionManager nextValue exception conn: %s %s \"%s\"",
-                                conn, e.getClass().getSimpleName(), e.getMessage()));
+                System.out.printf("ConnectionManager nextValue exception conn: %s %s \"%s\"%n",
+                        conn, e.getClass().getSimpleName(), e.getMessage());
             }
         }
         return foundValue;

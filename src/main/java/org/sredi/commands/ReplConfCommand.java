@@ -5,15 +5,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.sredi.ClientConnection;
-import org.sredi.CentralRepository;
+import org.sredi.replication.ClientConnection;
+import org.sredi.storage.CentralRepository;
 import org.sredi.resp.RespArrayValue;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespConstants;
 import org.sredi.resp.RespSimpleStringValue;
 import org.sredi.resp.RespValue;
 
-public class ReplConfCommand extends RedisCommand {
+public class ReplConfCommand extends Command {
     public static final String ACK_NAME = "ack";
     public static final String CAPA_NAME = "capa";
     public static final String GETACK_NAME = "getack";

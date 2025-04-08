@@ -1,4 +1,4 @@
-package org.sredi;
+package org.sredi.storage;
 
 import java.io.BufferedInputStream;
 import java.io.File;

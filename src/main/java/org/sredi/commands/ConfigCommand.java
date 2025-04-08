@@ -2,12 +2,12 @@ package org.sredi.commands;
 
 import java.util.Map;
 
-import org.sredi.CentralRepository;
+import org.sredi.storage.CentralRepository;
 import org.sredi.resp.RespArrayValue;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespValue;
 
-public class ConfigCommand extends RedisCommand {
+public class ConfigCommand extends Command {
     private Action action;
     private String key;
 

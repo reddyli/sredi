@@ -5,7 +5,7 @@ import java.io.IOException;
 import java.time.Clock;
 import java.util.Map;
 
-import org.sredi.StoredData;
+import org.sredi.storage.StoredData;
 
 public class RdbFileParser {
 

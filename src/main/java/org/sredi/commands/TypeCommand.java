@@ -2,15 +2,15 @@ package org.sredi.commands;
 
 import java.util.Map;
 
-import org.sredi.CentralRepository;
+import org.sredi.storage.CentralRepository;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespValue;
 
 /**
- * Represents a TYPE command in a Redis server. This class is a subclass of RedisCommand and is
+ * Represents a TYPE command in a Redis server. This class is a subclass of Command and is
  * responsible for setting the command arguments and executing the command.
  */
-public class TypeCommand extends RedisCommand {
+public class TypeCommand extends Command {
 
     private static ArgReader ARG_READER = new ArgReader(Type.TYPE.name(), new String[] {
             ":string", // command name

@@ -1,4 +1,4 @@
-package org.sredi;
+package org.sredi.replication;
 
 import java.io.IOException;
 

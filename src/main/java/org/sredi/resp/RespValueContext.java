@@ -1,6 +1,6 @@
 package org.sredi.resp;
 
-import org.sredi.ClientConnection;
+import org.sredi.replication.ClientConnection;
 
 public class RespValueContext {
     private ClientConnection clientConnection;

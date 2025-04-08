@@ -3,14 +3,14 @@ package org.sredi.commands;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.sredi.CentralRepository;
+import org.sredi.storage.CentralRepository;
 import org.sredi.resp.RespArrayValue;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespInteger;
 import org.sredi.resp.RespSimpleStringValue;
 import org.sredi.resp.RespValue;
 
-public class PsyncCommand extends RedisCommand {
+public class PsyncCommand extends Command {
 
     private static ArgReader ARG_READER = new ArgReader(Type.PSYNC.name(), new String[] { ":string", // command
                                                                                                      // name

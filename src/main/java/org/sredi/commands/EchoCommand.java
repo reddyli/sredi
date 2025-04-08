@@ -1,15 +1,15 @@
 package org.sredi.commands;
 
-import org.sredi.CentralRepository;
+import org.sredi.storage.CentralRepository;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespConstants;
 import org.sredi.resp.RespValue;
 
 /**
- * The `EchoCommand` class is a subclass of the `RedisCommand` class and represents a command to
+ * The `EchoCommand` class is a subclass of the `Command` class and represents a command to
  * echo a bulk string argument in a Redis service.
  */
-public class EchoCommand extends RedisCommand {
+public class EchoCommand extends Command {
 
     RespBulkString bulkStringArg;
 

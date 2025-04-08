@@ -5,7 +5,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import org.sredi.CentralRepository;
+import org.sredi.storage.CentralRepository;
 import org.sredi.resp.RespArrayValue;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespSimpleErrorValue;
@@ -13,7 +13,7 @@ import org.sredi.resp.RespValue;
 import org.sredi.streams.IllegalStreamItemIdException;
 import org.sredi.streams.StreamId;
 
-public class XaddCommand extends RedisCommand {
+public class XaddCommand extends Command {
 
     private static ArgReader ARG_READER = new ArgReader(Type.XADD.name(), new String[] {
             ":string", // command name

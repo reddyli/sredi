@@ -1,4 +1,4 @@
-package org.sredi;
+package org.sredi.storage;
 
 import org.sredi.resp.RespSimpleStringValue;
 

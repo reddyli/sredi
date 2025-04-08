@@ -1,4 +1,4 @@
-package org.sredi;
+package org.sredi.replication;
 
 import java.io.IOException;
 import java.time.Clock;
@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.sredi.commands.RedisCommand;
+import org.sredi.commands.Command;
 import org.sredi.commands.ReplConfCommand;
 
 public final class ReplConfAckManager {
@@ -89,7 +89,7 @@ public final class ReplConfAckManager {
         ReplConfCommand ack = new ReplConfCommand(ReplConfCommand.Option.GETACK, "*");
         String ackString = new String(ack.asCommand()).toUpperCase();
         System.out.println(String.format("ReplConfAckManager: Sending command '%s' to client '%s'",
-                RedisCommand.responseLogString(ackString.getBytes()), connection));
+                Command.responseLogString(ackString.getBytes()), connection));
         try {
             connection.writeFlush(ackString.getBytes());
         } catch (IOException e) {

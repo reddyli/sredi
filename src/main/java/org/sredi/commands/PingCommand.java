@@ -1,11 +1,11 @@
 package org.sredi.commands;
 
-import org.sredi.CentralRepository;
+import org.sredi.storage.CentralRepository;
 import org.sredi.resp.RespArrayValue;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespValue;
 
-public class PingCommand extends RedisCommand {
+public class PingCommand extends Command {
 
     public PingCommand() {
         super(Type.PING);

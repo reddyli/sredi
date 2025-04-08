@@ -1,17 +1,18 @@
-package org.sredi;
+package org.sredi.replication;
 
 import java.io.IOException;
 import java.net.Socket;
 import java.time.Clock;
 import java.util.Map;
 
-import org.sredi.commands.RedisCommand;
+import org.sredi.commands.Command;
 import org.sredi.commands.ReplConfCommand;
 import org.sredi.resp.RespArrayValue;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespConstants;
 import org.sredi.resp.RespValue;
 import org.sredi.setup.SetupOptions;
+import org.sredi.storage.CentralRepository;
 
 public class FollowerService extends CentralRepository {
     private ConnectionToLeader leaderConnection;
@@ -27,7 +28,7 @@ public class FollowerService extends CentralRepository {
     }
 
     @Override
-    public void getReplcationInfo(StringBuilder sb) {
+    public void getReplicationInfo(StringBuilder sb) {
         // nothing to add for now
     }
 
@@ -80,7 +81,7 @@ public class FollowerService extends CentralRepository {
     }
 
     @Override
-    public void execute(RedisCommand command, ClientConnection conn) throws IOException {
+    public void execute(Command command, ClientConnection conn) throws IOException {
         if (leaderConnection.isLeaderConnection(conn)) {
             leaderConnection.executeCommandFromLeader(conn, command);
         } else {
@@ -100,7 +101,7 @@ public class FollowerService extends CentralRepository {
             String responseValue = String
                     .valueOf(startBytesOffset - leaderConnection.getHandshakeBytesReceived());
             return new RespArrayValue(new RespValue[] {
-                    new RespBulkString(RedisCommand.Type.REPLCONF.name().getBytes()),
+                    new RespBulkString(Command.Type.REPLCONF.name().getBytes()),
                     new RespBulkString("ACK".getBytes()),
                     new RespBulkString(responseValue.getBytes()) }).asResponse();
         }

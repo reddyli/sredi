@@ -2,11 +2,11 @@ package org.sredi.commands;
 
 import java.util.Map;
 
-import org.sredi.CentralRepository;
+import org.sredi.storage.CentralRepository;
 import org.sredi.resp.RespInteger;
 import org.sredi.resp.RespValue;
 
-public class WaitCommand extends RedisCommand {
+public class WaitCommand extends Command {
     int numReplicas;
     long timeoutMillis;
 

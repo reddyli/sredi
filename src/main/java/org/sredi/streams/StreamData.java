@@ -8,13 +8,13 @@ import java.util.Map;
 
 import org.sredi.resp.RespValue;
 
-public class RedisStreamData {
+public class StreamData {
     public static final int MAX_READ_COUNT = 100;
     private final String streamKey;
     private final OrderedArrayList<StreamId> streamIds = new OrderedArrayList<>();
     private final Map<StreamId, RespValue[]> dataValues = new HashMap<>();
 
-    public RedisStreamData(String streamKey) {
+    public StreamData(String streamKey) {
         this.streamKey = streamKey;
     }
 
@@ -162,7 +162,7 @@ public class RedisStreamData {
 
     @Override
     public String toString() {
-        return "RedisStreamData [streamKey=" + streamKey
+        return "StreamData [streamKey=" + streamKey
                 + ", lastStreamId=" + streamIds.last()
                 + ", dataValues.size=" + dataValues.size() + "]";
     }

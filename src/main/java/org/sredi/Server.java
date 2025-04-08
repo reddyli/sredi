@@ -1,6 +1,7 @@
 package org.sredi;
 
 import org.sredi.setup.SetupOptions;
+import org.sredi.storage.CentralRepository;
 
 import java.io.IOException;
 import java.time.Clock;
@@ -13,16 +14,6 @@ public class Server implements Runnable {
         options = new SetupOptions();
         if (!options.parseArgs(args)) {
             throw new RuntimeException("Invalid arguments");
-        }
-    }
-
-    public Server(SetupOptions options) {
-        this.options = options;
-    }
-
-    public void terminate() {
-        if (repository != null) {
-            repository.terminate();
         }
     }
 

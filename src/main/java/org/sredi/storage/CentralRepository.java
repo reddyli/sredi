@@ -1,4 +1,4 @@
-package org.sredi;
+package org.sredi.storage;
 
 import java.io.File;
 import java.io.IOException;
@@ -15,19 +15,20 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
-import org.sredi.commands.RedisCommand;
+import lombok.Getter;
+import org.sredi.commands.Command;
+import org.sredi.commands.EofCommand;
+import org.sredi.commands.TerminateCommand;
 import org.sredi.constants.ReplicationConstants;
-import org.sredi.commands.RedisCommandConstructor;
+import org.sredi.commands.CommandConstructor;
+import org.sredi.replication.*;
 import org.sredi.resp.RespConstants;
 import org.sredi.resp.RespSimpleStringValue;
 import org.sredi.resp.RespValue;
 import org.sredi.resp.RespValueParser;
 import org.sredi.setup.SetupOptions;
-import org.sredi.streams.IllegalStreamItemIdException;
-import org.sredi.streams.RedisStreamData;
-import org.sredi.streams.StreamId;
-import org.sredi.streams.StreamValue;
-import org.sredi.streams.StreamsWaitManager;
+import org.sredi.streams.*;
+import org.sredi.streams.StreamData;
 
 public abstract class CentralRepository implements ReplicationServiceInfoProvider {
 
@@ -36,17 +37,19 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
 
     private ServerSocket serverSocket;
     private EventLoop eventLoop;
-    private final RedisCommandConstructor commandConstructor;
+    private final CommandConstructor commandConstructor;
     private final RespValueParser valueParser;
     private final ExecutorService connectionsExecutorService;
     private final ExecutorService commandsExecutorService;
+    @Getter
     private final ConnectionManager connectionManager;
     private volatile boolean done = false;
     private final SetupOptions options;
+    @Getter
     private final int port;
     private final String role;
     protected final Clock clock;
-    private final Map<String, StoredData> dataStoreMap = new ConcurrentHashMap<>();
+    private final Map<String, StoredData> dataStore = new ConcurrentHashMap<>();
 
     public static CentralRepository newInstance(SetupOptions options, Clock clock) {
         String role = options.getRole();
@@ -54,7 +57,7 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
             case ReplicationConstants.REPLICA -> new FollowerService(options, clock);
             case ReplicationConstants.MASTER -> new LeaderService(options, clock);
         default -> throw new UnsupportedOperationException(
-                "Unexpected role type for new Redis repository: " + role);
+                "Unexpected role type for new repository: " + role);
         };
     }
 
@@ -63,22 +66,19 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
         this.port = options.getPort();
         this.role = options.getRole();
         this.clock = clock;
-        commandConstructor = new RedisCommandConstructor();
+        commandConstructor = new CommandConstructor();
         valueParser = new RespValueParser();
 
-        // Thread pool of size 2 - one for accepting new client connections, one for reading values
-        // from those clients in the ConnectionManager
         connectionsExecutorService = Executors.newFixedThreadPool(2);
-        // Use a cached thread pool for executing blocking commands
         commandsExecutorService = Executors.newCachedThreadPool();
 
-        // read database
+        // read from RDB Dump
         if (options.getDbfilename() != null) {
             try {
                 File dbFile = new File(options.getDir(), options.getDbfilename());
                 // only read the file if it exists
                 if (dbFile.exists()) {
-                    DatabaseReader reader = new DatabaseReader(dbFile, dataStoreMap, clock);
+                    DatabaseReader reader = new DatabaseReader(dbFile, dataStore, clock);
                     reader.readDatabase();
                 } else {
                     System.out.println(String.format("Database file %s does not exist",
@@ -111,9 +111,8 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
 
                     ClientConnection conn = new ClientConnection(clientSocket, valueParser);
                     connectionManager.addConnection(conn);
-                    System.out.println(
-                            String.format("Connection accepted from client: %s, opened: %s", conn,
-                                    !conn.isClosed()));
+                    System.out.printf("Connection accepted from client: %s, opened: %s%n", conn,
+                            !conn.isClosed());
                 } catch (IOException e) {
                     System.out.println("IOException on accept: " + e.getMessage());
                 }
@@ -131,10 +130,6 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
         serverSocket.close();
     }
 
-    public int getPort() {
-        return port;
-    }
-
     public String getConfig(String configName) {
         // Note: returns null for unknown config name
         return options.getConfigValue(configName);
@@ -146,52 +141,52 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
     }
 
     public boolean containsKey(String key) {
-        return dataStoreMap.containsKey(key);
+        return dataStore.containsKey(key);
     }
 
     public boolean containsUnexpiredKey(String key) {
-        StoredData storedData = dataStoreMap.getOrDefault(key, null);
+        StoredData storedData = dataStore.getOrDefault(key, null);
         return storedData != null && !isExpired(storedData);
     }
 
     public StoredData get(String key) {
-        return dataStoreMap.get(key);
+        return dataStore.get(key);
     }
 
     public RespSimpleStringValue getType(String key) {
-        if (dataStoreMap.containsKey(key)) {
-            return dataStoreMap.get(key).getType().getTypeResponse();
+        if (dataStore.containsKey(key)) {
+            return dataStore.get(key).getType().getTypeResponse();
         } else {
             return new RespSimpleStringValue("none");
         }
     }
 
     public StoredData set(String key, StoredData storedData) {
-        return dataStoreMap.put(key, storedData);
+        return dataStore.put(key, storedData);
     }
 
     public StreamId xadd(String key, String itemId, RespValue[] itemMap)
             throws IllegalStreamItemIdException {
-        StoredData storedData = dataStoreMap.computeIfAbsent(key,
-                (k) -> new StoredData(new RedisStreamData(k), clock.millis(), null));
+        StoredData storedData = dataStore.computeIfAbsent(key,
+                (k) -> new StoredData(new StreamData(k), clock.millis(), null));
         return storedData.getStreamValue().add(itemId, clock, itemMap);
     }
 
     public List<StreamValue> xrange(String key, String start, String end)
             throws IllegalStreamItemIdException {
-        StoredData storedData = dataStoreMap.computeIfAbsent(key,
-                (k) -> new StoredData(new RedisStreamData(k), clock.millis(), null));
+        StoredData storedData = dataStore.computeIfAbsent(key,
+                (k) -> new StoredData(new StreamData(k), clock.millis(), null));
         return storedData.getStreamValue().queryRange(start, end);
     }
 
     public List<List<StreamValue>> xread(
             List<String> keys, List<String> startValues, Long timeoutMillis)
             throws IllegalStreamItemIdException {
-        Map<String, RedisStreamData> streams = keys.stream()
+        Map<String, StreamData> streams = keys.stream()
                 .collect(Collectors.toMap(
                         s -> s,
-                        s -> dataStoreMap.computeIfAbsent(s,
-                                (k) -> new StoredData(new RedisStreamData(k), clock.millis(), null))
+                        s -> dataStore.computeIfAbsent(s,
+                                (k) -> new StoredData(new StreamData(k), clock.millis(), null))
                                 .getStreamValue()));
         Map<String, StreamId> startIds = new HashMap<>();
         int i = 0;
@@ -204,18 +199,10 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
     }
 
     public void delete(String key) {
-        dataStoreMap.remove(key);
+        dataStore.remove(key);
     }
 
-    public ServerSocket getServerSocket() {
-        return serverSocket;
-    }
-
-    public Map<String, StoredData> getDataStoreMap() {
-        return dataStoreMap;
-    }
-
-    public abstract void execute(RedisCommand command, ClientConnection conn) throws IOException;
+    public abstract void execute(Command command, ClientConnection conn) throws IOException;
 
     public boolean isExpired(StoredData storedData) {
         long now = clock.millis();
@@ -230,15 +217,15 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
 
         StringBuilder sb = new StringBuilder();
         if (infoSection(optionsMap, "server")) {
-            sb.append("# Redis server info\n");
-            sb.append("redis_version:").append("3.2.0-org-baylight").append("\n");
+            sb.append("# Server info\n");
+            sb.append("version:").append("\n");
         }
 
         // replication section
         if (infoSection(optionsMap, "replication")) {
             sb.append("# Replication\n");
             sb.append("role:").append(role).append("\n");
-            getReplcationInfo(sb);
+            getReplicationInfo(sb);
         }
         return sb.toString();
     }
@@ -260,19 +247,6 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
     public abstract byte[] replicationConfirm(ClientConnection connection, Map<String, RespValue> optionsMap,
             long startBytesOffset);
 
-    /**
-     * Wait until replication has caught up for the given number of replicas. The repository must block
-     * on this method until either the number of requested replicas has been reached or the timeout
-     * has been reached.
-     * 
-     * @param numReplicas   the requested number of replicas
-     * @param timeoutMillis the timeout in milliseconds. If the timeout is reached, the method
-     *                      returns the number of replicas that have caught up. If the timeout is
-     *                      zero, the method returns immediately. If the timeout is negative, an
-     *                      {@link IllegalArgumentException}
-     * @return the number of replicas that have caught up. This may be less than the number of
-     *         replicas requested.
-     */
     public abstract int waitForReplicationServers(int numReplicas, long timeoutMillis);
 
     public byte[] psync(Map<String, RespValue> optionsMap) {
@@ -290,8 +264,8 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
     }
 
     public void terminate() {
-        System.out.println(String.format("Terminate invoked. Closing %d connections.",
-                connectionManager.getNumConnections()));
+        System.out.printf("Terminate invoked. Closing %d connections.%n",
+                connectionManager.getNumConnections());
         eventLoop.terminate();
         done = true;
         // stop accepting new connections and shut down the accept connections thread
@@ -303,21 +277,17 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
         shutdown();
     }
 
-    public ConnectionManager getConnectionManager() {
-        return connectionManager;
-    }
-
-    void executeCommand(ClientConnection conn, RedisCommand command) throws IOException {
-        System.out.println(String.format("Received client command: %s", command));
+    void executeCommand(ClientConnection conn, Command command) throws IOException {
+        System.out.printf("Received client command: %s%n", command);
 
         if (command.isBlockingCommand()) {
             commandsExecutorService.submit(() -> {
                 try {
                     execute(command, conn);
                 } catch (Exception e) {
-                    System.out.println(String.format(
-                            "EventLoop Exception: %s \"%s\"",
-                            e.getClass().getSimpleName(), e.getMessage()));
+                    System.out.printf(
+                            "EventLoop Exception: %s \"%s\"%n",
+                            e.getClass().getSimpleName(), e.getMessage());
                     e.printStackTrace();
                 }
             });
@@ -341,10 +311,10 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
     static class EventLoop {
         // keep a list of socket connections and continue checking for new connections
         private final CentralRepository service;
-        private final RedisCommandConstructor commandConstructor;
+        private final CommandConstructor commandConstructor;
         private volatile boolean done = false;
 
-        public EventLoop(CentralRepository service, RedisCommandConstructor commandConstructor) {
+        public EventLoop(CentralRepository service, CommandConstructor commandConstructor) {
             this.service = service;
             this.commandConstructor = commandConstructor;
         }
@@ -357,14 +327,14 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
             while (!done) {
                 // check for a value on one of the client sockets and process it as a command
                 boolean didProcess = service.getConnectionManager().getNextValue((conn, value) -> {
-                    RedisCommand command = commandConstructor.newCommandFromValue(value);
+                    Command command = commandConstructor.newCommandFromValue(value);
                     if (command != null) {
                         try {
                             service.executeCommand(conn, command);
                         } catch (Exception e) {
-                            System.out.println(String.format(
-                                    "EventLoop Exception: %s \"%s\"",
-                                    e.getClass().getSimpleName(), e.getMessage()));
+                            System.out.printf(
+                                    "EventLoop Exception: %s \"%s\"%n",
+                                    e.getClass().getSimpleName(), e.getMessage());
                             e.printStackTrace();
                             // since this is a blocking command, we better return an error response
                             conn.sendError(e.getMessage());
@@ -382,7 +352,7 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
     }
 
     public Collection<String> getKeys() {
-        return dataStoreMap.keySet();
+        return dataStore.keySet();
     }
 
 }

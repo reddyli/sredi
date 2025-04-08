@@ -27,7 +27,7 @@ public final class StreamsWaitManager {
     }
 
     public Map<String, List<StreamValue>> readWithWait(
-            Map<String, RedisStreamData> streams, Map<String, StreamId> startIds, int count,
+            Map<String, StreamData> streams, Map<String, StreamId> startIds, int count,
             Clock clock, long timeoutMillis) {
         Map<String, List<StreamValue>> result = new HashMap<>();
         int countPerStream = count;
@@ -35,7 +35,7 @@ public final class StreamsWaitManager {
         // but we only need 1 value to end waiting
         if (count == 0) {
             count = 1;
-            countPerStream = RedisStreamData.MAX_READ_COUNT;
+            countPerStream = StreamData.MAX_READ_COUNT;
         }
 
         // create lock for waiting on the set of streams

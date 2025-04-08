@@ -3,12 +3,12 @@ package org.sredi.commands;
 import java.util.List;
 import java.util.Map;
 
-import org.sredi.CentralRepository;
+import org.sredi.storage.CentralRepository;
 import org.sredi.resp.RespArrayValue;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespValue;
 
-public class KeysCommand extends RedisCommand {
+public class KeysCommand extends Command {
         private String paramString;
 
     /**

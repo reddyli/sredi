@@ -1,4 +1,4 @@
-package org.sredi;
+package org.sredi.replication;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -52,7 +52,6 @@ public class ClientConnection {
             throw new IllegalArgumentException("Expected RDB from leader, got char " + val);
         }
         long len = reader.readLong();
-        // TODO: refactor the RDB processing with a stream instead of byte array
         byte[] rdb = new byte[(int) len];
         for (int i = 0; i < len; i++) {
             rdb[i] = (byte) reader.read();
@@ -60,7 +59,7 @@ public class ClientConnection {
         return rdb;
     }
 
-    String getConnectionString() {
+    public String getConnectionString() {
         return clientSocket.getInetAddress().getHostAddress() + ":" + clientSocket.getPort();
     }
 

@@ -1,4 +1,4 @@
-package org.sredi;
+package org.sredi.replication;
 
 import java.io.IOException;
 import java.util.Deque;
@@ -8,9 +8,9 @@ import java.util.concurrent.Executors;
 import java.util.function.BiFunction;
 
 import lombok.Getter;
+import org.sredi.commands.Command;
 import org.sredi.commands.PingCommand;
 import org.sredi.commands.PsyncCommand;
-import org.sredi.commands.RedisCommand;
 import org.sredi.commands.ReplConfCommand;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespValue;
@@ -96,8 +96,8 @@ public class ConnectionToLeader {
         return fullResyncRdb.getValue();
     }
 
-    private void sendCommand(RedisCommand command,
-            BiFunction<RedisCommand, RespValue, Boolean> responseConsumer) {
+    private void sendCommand(Command command,
+                             BiFunction<Command, RespValue, Boolean> responseConsumer) {
         CommandAndResponseConsumer cmd = new CommandAndResponseConsumer(command, responseConsumer);
         // add the command to the queue
         commandsToLeader.offerLast(cmd);
@@ -169,7 +169,7 @@ public class ConnectionToLeader {
         return leaderConnection.equals(conn);
     }
 
-    public void executeCommandFromLeader(ClientConnection conn, RedisCommand command)
+    public void executeCommandFromLeader(ClientConnection conn, Command command)
             throws IOException {
         if (!isLeaderConnection(conn)) {
             System.out.println(String.format(
@@ -192,17 +192,17 @@ public class ConnectionToLeader {
         byte[] response = command.execute(service);
         if (writeResponse) {
             System.out.println(String.format("Follower service sending %s response: %s",
-                    command.getType().name(), RedisCommand.responseLogString(response)));
+                    command.getType().name(), Command.responseLogString(response)));
             if (response != null && response.length > 0) {
                 conn.writeFlush(response);
             }
         } else {
             System.out.println(String.format("Follower service do not send %s response: %s",
-                    command.getType().name(), RedisCommand.responseLogString(response)));
+                    command.getType().name(), Command.responseLogString(response)));
         }
     }
 
-    public boolean shouldSendResponseToConnection(RedisCommand command, ClientConnection conn) {
+    public boolean shouldSendResponseToConnection(Command command, ClientConnection conn) {
         if (!leaderConnection.equals(conn)) {
             return true;
         }
@@ -212,11 +212,11 @@ public class ConnectionToLeader {
     }
 
     private static class CommandAndResponseConsumer {
-        private final RedisCommand command;
-        private final BiFunction<RedisCommand, RespValue, Boolean> responseConsumer;
+        private final Command command;
+        private final BiFunction<Command, RespValue, Boolean> responseConsumer;
 
-        public CommandAndResponseConsumer(RedisCommand command,
-                BiFunction<RedisCommand, RespValue, Boolean> responseConsumer) {
+        public CommandAndResponseConsumer(Command command,
+                                          BiFunction<Command, RespValue, Boolean> responseConsumer) {
             this.command = command;
             this.responseConsumer = responseConsumer;
         }

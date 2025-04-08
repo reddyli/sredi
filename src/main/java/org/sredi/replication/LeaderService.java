@@ -1,4 +1,4 @@
-package org.sredi;
+package org.sredi.replication;
 
 import java.io.IOException;
 import java.time.Clock;
@@ -11,8 +11,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
-import org.sredi.commands.RedisCommand;
-import org.sredi.commands.RedisCommand.Type;
+import lombok.Getter;
+import org.sredi.commands.Command;
+import org.sredi.commands.Command.Type;
 import org.sredi.commands.ReplConfCommand;
 import org.sredi.resp.RespArrayValue;
 import org.sredi.resp.RespBulkString;
@@ -20,6 +21,7 @@ import org.sredi.resp.RespConstants;
 import org.sredi.resp.RespSimpleStringValue;
 import org.sredi.resp.RespValue;
 import org.sredi.setup.SetupOptions;
+import org.sredi.storage.CentralRepository;
 
 import java.util.Set;
 
@@ -27,6 +29,7 @@ public class LeaderService extends CentralRepository {
     private final static String EMPTY_RDB_BASE64 = "UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==";
 
     String replicationId = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb";
+    @Getter
     long totalReplicationOffset = 0L;
     Map<String, Long> replicationOffsets = new HashMap<>();
     Map<String, ConnectionToFollower> replMap = new ConcurrentHashMap<>();
@@ -41,16 +44,8 @@ public class LeaderService extends CentralRepository {
         return replicationOffsets.getOrDefault(follower, 0L);
     }
 
-    public String getReplicationId() {
-        return replicationId;
-    }
-
-    public long getTotalReplicationOffset() {
-        return totalReplicationOffset;
-    }
-
     @Override
-    public void execute(RedisCommand command, ClientConnection conn) throws IOException {
+    public void execute(Command command, ClientConnection conn) throws IOException {
         // for the leader, return the command response and replicate to the followers
         byte[] response = command.execute(this);
         // Note: first complete replication before sending the response
@@ -95,7 +90,7 @@ public class LeaderService extends CentralRepository {
     }
 
     @Override
-    public void getReplcationInfo(StringBuilder sb) {
+    public void getReplicationInfo(StringBuilder sb) {
         sb.append("master_replid:").append(replicationId).append("\n");
         sb.append("master_repl_offset:").append(totalReplicationOffset).append("\n");
     }

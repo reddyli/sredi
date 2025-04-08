@@ -5,10 +5,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
-import org.sredi.CentralRepository;
+import org.sredi.storage.CentralRepository;
 import org.sredi.resp.RespValue;
 
-public abstract class RedisCommand {
+public abstract class Command {
     public enum Type {
         CONFIG, DEL, ECHO, GET, INFO, KEYS, PING, PSYNC, REPLCONF, SET, TYPE, WAIT, XADD, XRANGE,
         XREAD,
@@ -27,7 +27,7 @@ public abstract class RedisCommand {
 
     protected final Type type;
 
-    public RedisCommand(Type type) {
+    public Command(Type type) {
         this.type = type;
     }
 

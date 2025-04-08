@@ -1,4 +1,4 @@
-package org.sredi;
+package org.sredi.replication;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -9,7 +9,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.sredi.commands.RedisCommand;
+import org.sredi.commands.Command;
 import org.sredi.resp.RespValue;
 
 public class WaitExecutor {
@@ -28,7 +28,7 @@ public class WaitExecutor {
         this.latch = new CountDownLatch(requestWaitFor);
     }
 
-    int wait(Collection<ConnectionToFollower> followers, long timeoutMillis) {
+    public int wait(Collection<ConnectionToFollower> followers, long timeoutMillis) {
         try {
             // extend the timeout to allow for codecrafters tests to pass - this may be needed for
             // "replication-18" which expects all replicas, even if it asks for less than all
@@ -127,7 +127,7 @@ public class WaitExecutor {
             } else {
                 System.out.println(String.format("Time %d: after send on %s, response: %s",
                         System.currentTimeMillis(), connection,
-                        RedisCommand.responseLogString(ackResponse.asResponse())));
+                        Command.responseLogString(ackResponse.asResponse())));
                 System.out.println(Integer.toHexString(System.identityHashCode(numAcknowledged)));
                 int prevAck = numAcknowledged.getAndIncrement();
                 latch.countDown();

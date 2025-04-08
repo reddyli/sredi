@@ -1,21 +1,18 @@
-package org.sredi;
+package org.sredi.storage;
 
 import java.util.Arrays;
 import java.util.Objects;
 
-import org.sredi.streams.RedisStreamData;
+import org.sredi.streams.StreamData;
 
-/**
- * Data stored for a Redis map entry
- **/
 public class StoredData {
     private final byte[] value;
-    private final RedisStreamData streamValue;
+    private final StreamData streamValue;
     private final StoredDataType type;
     private final long storedAt;
     private final Long ttlMillis;
 
-    public StoredData(RedisStreamData streamValue, long storedAt, Long ttlMillis) {
+    public StoredData(StreamData streamValue, long storedAt, Long ttlMillis) {
         this.value = null;
         this.streamValue = streamValue;
         this.type = StoredDataType.STREAM;
@@ -35,7 +32,7 @@ public class StoredData {
         return value;
     }
 
-    public RedisStreamData getStreamValue() {
+    public StreamData getStreamValue() {
         return streamValue;
     }
 

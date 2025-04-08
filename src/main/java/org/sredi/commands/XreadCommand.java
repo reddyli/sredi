@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import org.sredi.CentralRepository;
+import org.sredi.storage.CentralRepository;
 import org.sredi.resp.RespArrayValue;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespConstants;
@@ -14,7 +14,7 @@ import org.sredi.resp.RespValue;
 import org.sredi.streams.IllegalStreamItemIdException;
 import org.sredi.streams.StreamValue;
 
-public class XreadCommand extends RedisCommand {
+public class XreadCommand extends Command {
 
     private static ArgReader ARG_READER = new ArgReader(Type.XREAD.name(), new String[] {
             ":string", // command name

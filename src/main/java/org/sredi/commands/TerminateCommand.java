@@ -1,8 +1,8 @@
-package org.sredi;
+package org.sredi.commands;
 
-import org.sredi.commands.RedisCommand;
+import org.sredi.storage.CentralRepository;
 
-public class TerminateCommand extends RedisCommand {
+public class TerminateCommand extends Command {
 
     public TerminateCommand() {
         super(Type.TERMINATE);

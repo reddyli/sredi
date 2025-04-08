@@ -5,18 +5,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.sredi.CentralRepository;
-import org.sredi.StoredData;
+import org.sredi.storage.CentralRepository;
+import org.sredi.storage.StoredData;
 import org.sredi.resp.RespArrayValue;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespConstants;
 import org.sredi.resp.RespValue;
 
 /**
- * Represents a SET command in a Redis server.
- * This class is a subclass of RedisCommand and is responsible for setting the command arguments and executing the command.
+ * Represents a SET command in a server.
+ * This class is a subclass of Command and is responsible for setting the command arguments and executing the command.
  */
-public class SetCommand extends RedisCommand {
+public class SetCommand extends Command {
 
     // Args reader specification for SET command
     private static ArgReader ARG_READER = new ArgReader(Type.SET.name(), new String[] {
@@ -113,8 +113,8 @@ public class SetCommand extends RedisCommand {
     }
 
     /**
-     * Executes the SET command in a Redis server.
-     * This method sets the specified key-value pair in the Redis service according to the options specified in the.
+     * Executes the SET command in a  server.
+     * This method sets the specified key-value pair in the  service according to the options specified in the.
      * 
      * If the "xx" option is present, the key is updated only if it already exists.
      * If the "nx" option is present, the key is updated only if it does not already exist.
@@ -124,7 +124,7 @@ public class SetCommand extends RedisCommand {
      * If the "pxat" option is present, the key is set to expire at the specified Unix timestamp.
      * If the "keepttl" option is present, the value is updated, but the expireation time is not changed.
      * 
-     * @param service the Redis service to execute the command on
+     * @param service the  service to execute the command on
      * @return the response as a byte array:
      *         If the key is not already stored and the "nx" option is present, null is returned as a bulk string response.
      *         If the key is already stored and the "xx" option is present, null is returned as a bulk string response.
@@ -165,7 +165,7 @@ public class SetCommand extends RedisCommand {
     }
 
     /**
-     * Calculates the time-to-live (TTL) value for a Redis key based on the options map.
+     * Calculates the time-to-live (TTL) value for a  key based on the options map.
      * 
      * @param now the current time in milliseconds
      * @return the TTL value in milliseconds, or null if no TTL option is present
