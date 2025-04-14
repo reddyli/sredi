@@ -5,19 +5,10 @@ import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespConstants;
 import org.sredi.resp.RespValue;
 
-/**
- * The `EchoCommand` class is a subclass of the `Command` class and represents a command to
- * echo a bulk string argument in a Redis service.
- */
 public class EchoCommand extends Command {
 
     RespBulkString bulkStringArg;
 
-    /**
-     * Return the echo value.
-     * 
-     * @return the value to be echoed
-     */
     public RespBulkString getEchoValue() {
         return bulkStringArg;
     }
@@ -55,12 +46,6 @@ public class EchoCommand extends Command {
         this.bulkStringArg = args[1].asBulkString();
     }
 
-    /**
-     * Executes the command in a Redis service. It returns the bulk string argument as the response.
-     *
-     * @param service the Redis service to execute the command in
-     * @return the bulk string argument as the response
-     */
     @Override
     public byte[] execute(CentralRepository service) {
         return bulkStringArg != null ? bulkStringArg.asResponse() : RespConstants.NULL;

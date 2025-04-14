@@ -20,7 +20,7 @@ public class KeysCommand extends Command {
 
     /**
      * Constructs a new KeysCommand object with the KEYS command type and the specified key.
-     * 
+     *
      * @param key the key for the KEYS command
      */
     public KeysCommand(String paramString) {
@@ -30,7 +30,7 @@ public class KeysCommand extends Command {
 
     /**
      * Gets the param for the KEYS command.
-     * 
+     *
      * @return the key for the KEYS command
      */
     public String getParam() {
@@ -40,7 +40,7 @@ public class KeysCommand extends Command {
     /**
      * Sets the command arguments by parsing the provided RespValue array. The arguments should
      * contain the key as the first element.
-     * 
+     *
      * @param args the command arguments
      */
     @Override
@@ -52,14 +52,6 @@ public class KeysCommand extends Command {
         this.paramString = optionsMap.get("1").getValueAsString();
     }
 
-    /**
-     * Executes the KEYS command by retrieving the value associated with the specified key from the
-     * Redis service. If the key exists and is not expired, the value is returned as a byte array.
-     * If the key does not exist or is expired, null is returned.
-     * 
-     * @param service the Redis service to execute the command on
-     * @return the value associated with the key, or null if the key does not exist or is expired
-     */
     @Override
     public byte[] execute(CentralRepository service) {
         List<RespBulkString> keys = service.getKeys().stream().map(String::getBytes).map(RespBulkString::new).toList();
@@ -68,7 +60,7 @@ public class KeysCommand extends Command {
 
     /**
      * Returns a string representation of the KeysCommand object.
-     * 
+     *
      * @return a string representation of the KeysCommand object
      */
     @Override

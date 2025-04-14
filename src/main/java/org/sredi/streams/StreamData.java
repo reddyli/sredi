@@ -6,10 +6,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import lombok.Getter;
 import org.sredi.resp.RespValue;
 
 public class StreamData {
     public static final int MAX_READ_COUNT = 100;
+    @Getter
     private final String streamKey;
     private final OrderedArrayList<StreamId> streamIds = new OrderedArrayList<>();
     private final Map<StreamId, RespValue[]> dataValues = new HashMap<>();
@@ -39,7 +41,7 @@ public class StreamData {
                             String.format("ERR: bad id format: %s", itemId));
                 }
                 // if timeId not seen yet, then counter remains 0, except for special case
-                if (streamIds.size() == 0 || streamIds.last().getTimeId() != timeId) {
+                if (streamIds.isEmpty() || streamIds.last().getTimeId() != timeId) {
                     // special case timeId 0L, then the counter starts at 1 instead of 0
                     if (timeId == 0L) {
                         counter = 1;
@@ -53,7 +55,7 @@ public class StreamData {
             // autogenerate the time and counter
             long now = clock.millis();
             int counter = 0;
-            if (streamIds.size() > 0 && streamIds.last().getTimeId() == now) {
+            if (!streamIds.isEmpty() && streamIds.last().getTimeId() == now) {
                 counter = streamIds.last().getCounter() + 1;
             }
             streamId = new StreamId(now, counter);
@@ -70,12 +72,10 @@ public class StreamData {
 
     private void validateStreamIdMinimum(StreamId streamId) throws IllegalStreamItemIdException {
         if (StreamId.compare(streamId, StreamId.MIN_ID) <= 0) {
-            throw new IllegalStreamItemIdException(String.format(
-                    "ERR The ID specified in XADD must be greater than 0-0"));
+            throw new IllegalStreamItemIdException("ERR The ID specified in XADD must be greater than 0-0");
         }
-        if (streamIds.size() > 0 && StreamId.compare(streamId, streamIds.last()) <= 0) {
-            throw new IllegalStreamItemIdException(String.format(
-                    "ERR The ID specified in XADD is equal or smaller than the target stream top item"));
+        if (!streamIds.isEmpty() && StreamId.compare(streamId, streamIds.last()) <= 0) {
+            throw new IllegalStreamItemIdException("ERR The ID specified in XADD is equal or smaller than the target stream top item");
         }
     }
 
@@ -116,7 +116,7 @@ public class StreamData {
         }
         String[] ids = param.split("-");
         long timeId = 0;
-        if (ids[0].length() > 0) {
+        if (!ids[0].isEmpty()) {
             try {
                 timeId = Long.parseLong(ids[0]);
             } catch (NumberFormatException e) {
@@ -140,13 +140,6 @@ public class StreamData {
             counter = isStart ? 0 : Integer.MAX_VALUE;
         }
         return StreamId.of(timeId, counter);
-    }
-
-    /**
-     * @return the streamKey
-     */
-    public String getStreamKey() {
-        return streamKey;
     }
 
     public StreamId getStreamIdForRead(String id) throws IllegalStreamItemIdException {

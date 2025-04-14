@@ -21,7 +21,7 @@ public class RdbParsePrimitives {
     }
 
     public boolean readHeader() throws IOException {
-        return ByteUtils.compareToString(readChars(5), ("REDIS"));
+        return ByteUtils.compareToString(readChars(5), ("SREDI"));
     }
 
     public OpCode readCode() throws IOException {
@@ -72,6 +72,6 @@ public class RdbParsePrimitives {
             readCount++;
             return file.read();
         }
-        
+
     }
 }

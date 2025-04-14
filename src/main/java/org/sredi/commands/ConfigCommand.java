@@ -24,7 +24,7 @@ public class ConfigCommand extends Command {
 
     /**
      * Constructs a new ConfigCommand object with the specified action and key.
-     * 
+     *
      * @param action of the command
      * @param key    the key for the action
      */
@@ -36,7 +36,7 @@ public class ConfigCommand extends Command {
 
     /**
      * Gets the action for the CONFIG command.
-     * 
+     *
      * @return the action for the CONFIG command
      */
     public Action getAction() {
@@ -45,7 +45,7 @@ public class ConfigCommand extends Command {
 
     /**
      * Gets the key for the CONFIG command.
-     * 
+     *
      * @return the key for the CONFIG command
      */
     public String getKey() {
@@ -55,7 +55,7 @@ public class ConfigCommand extends Command {
     /**
      * Sets the command arguments by parsing the provided RespValue array. The arguments should
      * contain the key as the first element.
-     * 
+     *
      * @param args the command arguments
      */
     @Override
@@ -78,13 +78,6 @@ public class ConfigCommand extends Command {
         }
     }
 
-    /**
-     * Executes the CONFIG command by performing the requested action for specified config key in
-     * the Redis service.
-     *
-     * @param service the Redis service to execute the command on
-     * @return the result of the command execution to be returned to the client
-     */
     @Override
     public byte[] execute(CentralRepository service) {
         switch (action) {
@@ -103,11 +96,6 @@ public class ConfigCommand extends Command {
                         .asResponse();
     }
 
-    /**
-     * Returns a string representation of the GetCommand object.
-     * 
-     * @return a string representation of the GetCommand object
-     */
     @Override
     public String toString() {
         return "ConfigCommand [action=" + action + ", key=" + key + "]";

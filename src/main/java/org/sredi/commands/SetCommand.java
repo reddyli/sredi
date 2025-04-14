@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import lombok.Getter;
 import org.sredi.storage.CentralRepository;
 import org.sredi.storage.StoredData;
 import org.sredi.resp.RespArrayValue;
@@ -30,7 +31,21 @@ public class SetCommand extends Command {
 
     Map<String, RespValue> optionsMap = new HashMap<>();
 
+    /**
+     * -- GETTER --
+     *  Get the key to set.
+     *
+     * @return the key
+     */
+    @Getter
     RespBulkString key;
+    /**
+     * -- GETTER --
+     *  Ge the value to set for the key.
+     *
+     * @return the value
+     */
+    @Getter
     RespBulkString value;
 
     public SetCommand() {
@@ -45,7 +60,7 @@ public class SetCommand extends Command {
 
     /**
      * Get the options for the command.
-     * 
+     *
      * @return the optionsMap
      */
     Map<String, RespValue> getOptionsMap() {
@@ -53,28 +68,10 @@ public class SetCommand extends Command {
     }
 
     /**
-     * Get the key to set.
-     * 
-     * @return the key
-     */
-    public RespBulkString getKey() {
-        return key;
-    }
-
-    /**
-     * Ge the value to set for the key.
-     * 
-     * @return the value
-     */
-    public RespBulkString getValue() {
-        return value;
-    }
-
-    /**
      * Sets the arguments for the SET command.
-     * 
+     *
      * This method reads the arguments from the given RespValue array and sets the optionsMap, key, and value variables accordingly.
-     * 
+     *
      * @param args the RespValue array containing the arguments for the SET command
      */
     @Override
@@ -115,7 +112,7 @@ public class SetCommand extends Command {
     /**
      * Executes the SET command in a  server.
      * This method sets the specified key-value pair in the  service according to the options specified in the.
-     * 
+     *
      * If the "xx" option is present, the key is updated only if it already exists.
      * If the "nx" option is present, the key is updated only if it does not already exist.
      * If the "ex" option is present, the key is set to expire after the specified number of seconds.
@@ -123,7 +120,7 @@ public class SetCommand extends Command {
      * If the "exat" option is present, the key is set to expire at the specified Unix timestamp.
      * If the "pxat" option is present, the key is set to expire at the specified Unix timestamp.
      * If the "keepttl" option is present, the value is updated, but the expireation time is not changed.
-     * 
+     *
      * @param service the  service to execute the command on
      * @return the response as a byte array:
      *         If the key is not already stored and the "nx" option is present, null is returned as a bulk string response.
@@ -166,7 +163,7 @@ public class SetCommand extends Command {
 
     /**
      * Calculates the time-to-live (TTL) value for a  key based on the options map.
-     * 
+     *
      * @param now the current time in milliseconds
      * @return the TTL value in milliseconds, or null if no TTL option is present
      */

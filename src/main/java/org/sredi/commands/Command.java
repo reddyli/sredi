@@ -10,9 +10,8 @@ import org.sredi.resp.RespValue;
 
 public abstract class Command {
     public enum Type {
-        CONFIG, DEL, ECHO, GET, INFO, KEYS, PING, PSYNC, REPLCONF, SET, TYPE, WAIT, XADD, XRANGE,
+        CONFIG, DEL, ECHO, GET,INCR, INFO, KEYS, PING, PSYNC, REPLCONF, SET, TYPE, WAIT, XADD, XRANGE,
         XREAD,
-        // Folling are non-standard commands for baylight
         EOF, // close a client connection
         TERMINATE; // close all connections and kill the server
 

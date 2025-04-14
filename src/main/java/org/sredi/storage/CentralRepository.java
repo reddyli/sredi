@@ -81,8 +81,8 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
                     DatabaseReader reader = new DatabaseReader(dbFile, dataStore, clock);
                     reader.readDatabase();
                 } else {
-                    System.out.println(String.format("Database file %s does not exist",
-                            dbFile.getAbsolutePath()));
+                    System.out.printf("Database file %s does not exist%n",
+                            dbFile.getAbsolutePath());
                 }
             } catch (IOException e) {
                 throw new RuntimeException(e);

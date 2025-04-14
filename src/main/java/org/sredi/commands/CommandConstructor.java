@@ -29,6 +29,7 @@ public class CommandConstructor {
         case CONFIG -> new ConfigCommand();
         case ECHO -> new EchoCommand();
         case GET -> new GetCommand();
+        case INCR -> new IncrCommand();
         case INFO -> new InfoCommand();
         case KEYS -> new KeysCommand();
         case PING -> new PingCommand();
