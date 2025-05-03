@@ -25,23 +25,22 @@ public class ConnectionManager {
                 for (; iter.hasNext();) {
                     ClientConnection conn = iter.next();
                     if (conn.isClosed()) {
-                        System.out.println(
-                                String.format("Connection closed by the server: %s", conn));
+                        System.out.printf("Connection closed by the server: %s%n", conn);
                         clientValues.remove(conn);
                         iter.remove();
                     }
                     while (conn.available() > 0) {
                         didRead = true;
-                        System.out.println(String.format(
-                                "ConnectionManager: about to read from connection, available: %d %s",
-                                conn.available(), conn));
+                        System.out.printf(
+                                "ConnectionManager: about to read from connection, available: %d %s%n",
+                                conn.available(), conn);
                         RespValue value = null;
                         try {
                             value = conn.readValue();
                         } catch (Exception e) {
-                            System.out.println(String.format(
-                                    "ConnectionManager read exception conn: %s %s \"%s\"", conn,
-                                    e.getClass().getSimpleName(), e.getMessage()));
+                            System.out.printf(
+                                    "ConnectionManager read exception conn: %s %s \"%s\"%n", conn,
+                                    e.getClass().getSimpleName(), e.getMessage());
                         }
                         if (value != null) {
                             getClientValuesQueue(conn).offer(value);

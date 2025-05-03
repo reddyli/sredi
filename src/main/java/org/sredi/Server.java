@@ -22,7 +22,7 @@ public class Server implements Runnable {
         try {
             repository.start();
             repository.runCommandLoop();
-            System.out.println(String.format("Event loop terminated"));
+            System.out.println("Event loop terminated");
 
         } catch (IOException e) {
             System.out.println("IOException: " + e.getMessage());

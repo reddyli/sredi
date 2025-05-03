@@ -85,8 +85,7 @@ public class FollowerService extends CentralRepository {
         if (leaderConnection.isLeaderConnection(conn)) {
             leaderConnection.executeCommandFromLeader(conn, command);
         } else {
-            System.out.println(
-                    String.format("Executing command from non-leader connection: %s", conn));
+            System.out.printf("Executing command from non-leader connection: %s%n", conn);
             byte[] response = command.execute(this);
             if (response != null && response.length > 0) {
                 conn.writeFlush(response);

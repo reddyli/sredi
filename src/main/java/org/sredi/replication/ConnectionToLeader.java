@@ -51,19 +51,18 @@ public class ConnectionToLeader {
     }
 
     public void startHandshake() {
-        System.out.println(String.format("Starting handshake with leader"));
+        System.out.println("Starting handshake with leader");
         sendCommand(new PingCommand(), (cmd, response) -> {
             ReplConfCommand conf1 = new ReplConfCommand(ReplConfCommand.Option.LISTENING_PORT,
                     String.valueOf(service.getPort()));
             sendCommand(conf1, (conf1Cmd, response2) -> {
                 ReplConfCommand conf2 = new ReplConfCommand(ReplConfCommand.Option.CAPA, "psync2");
                 sendCommand(conf2, (conf2Cmd, response3) -> {
-                    PsyncCommand psync = new PsyncCommand("?", Long.valueOf(-1L));
+                    PsyncCommand psync = new PsyncCommand("?", -1L);
                     sendCommand(psync, (psyncCmd, response4) -> {
                         if (response4.isSimpleString() && response4.getValueAsString().toUpperCase()
                                 .startsWith("FULLRESYNC")) {
-                            System.out.println(
-                                    String.format("Full resync - looking for rdb response"));
+                            System.out.println("Full resync - looking for rdb response");
                             return true;
                         }
                         if (!response4.isBulkString()) {
@@ -71,7 +70,7 @@ public class ConnectionToLeader {
                                     String.format("Unexpected response: %s", response4));
                         }
                         setFullResyncRdb((RespBulkString) response4);
-                        System.out.println(String.format("Handshake completed"));
+                        System.out.println("Handshake completed");
                         handshakeBytesReceived = leaderConnection.getNumBytesReceived();
 
                         // after the handshake, allow the ConnectionManager to poll for commands
@@ -104,8 +103,8 @@ public class ConnectionToLeader {
     }
 
     public void terminate() {
-        System.out.println(String.format("Terminate follower invoked. Closing socket to leader %s.",
-                service.getLeaderClientSocket()));
+        System.out.printf("Terminate follower invoked. Closing socket to leader %s.%n",
+                service.getLeaderClientSocket());
         done = true;
         // close the connection to the leader
         try {
@@ -120,9 +119,9 @@ public class ConnectionToLeader {
     public void runHandshakeLoop() throws InterruptedException {
         while (!done) {
             if (leaderConnection.isClosed()) {
-                System.out.println(String.format(
-                        "Terminating repository due to connection is closed by leader during handshake: %s",
-                        leaderConnection));
+                System.out.printf(
+                        "Terminating repository due to connection is closed by leader during handshake: %s%n",
+                        leaderConnection);
                 terminate();
                 continue;
             }
@@ -132,12 +131,12 @@ public class ConnectionToLeader {
                 while (!commandsToLeader.isEmpty()) {
                     CommandAndResponseConsumer cmd = commandsToLeader.pollFirst();
                     // send the command to the leader
-                    System.out.println(String.format("Sending leader command: %s", cmd.command));
+                    System.out.printf("Sending leader command: %s%n", cmd.command);
                     leaderConnection.writeFlush(cmd.command.asCommand());
 
                     // read the response - will wait on the stream until the whole value is parsed
                     RespValue response = leaderConnection.readValue();
-                    System.out.println(String.format("Received leader response: %s", response));
+                    System.out.printf("Received leader response: %s%n", response);
 
                     // responseConsumer returns True if we expect the RDB value from the command
                     if (cmd.responseConsumer.apply(cmd.command, response)) {
@@ -145,24 +144,24 @@ public class ConnectionToLeader {
                             byte[] rdb = leaderConnection.readRDB();
 
                             response = new RespBulkString(rdb);
-                            System.out.println(String.format("Received leader RDB: %s", response));
+                            System.out.printf("Received leader RDB: %s%n", response);
                             cmd.responseConsumer.apply(cmd.command, response);
                         } catch (IOException e) {
-                            System.out.println(String.format(
-                                    "ConnectionToLeader: IOException on readRDB: %s %s",
-                                    e.getClass().getSimpleName(), e.getMessage()));
+                            System.out.printf(
+                                    "ConnectionToLeader: IOException on readRDB: %s %s%n",
+                                    e.getClass().getSimpleName(), e.getMessage());
                         }
                     }
                 }
                 // sleep a bit before the next handshake command
                 Thread.sleep(50L);
             } catch (Exception e) {
-                System.out.println(String.format("ConnectionToLeader Loop Exception: %s \"%s\"",
-                        e.getClass().getSimpleName(), e.getMessage()));
+                System.out.printf("ConnectionToLeader Loop Exception: %s \"%s\"%n",
+                        e.getClass().getSimpleName(), e.getMessage());
             }
         }
-        System.out.println(String.format(
-                "Exiting thread for handshake commands - done: %s", done));
+        System.out.printf(
+                "Exiting thread for handshake commands - done: %s%n", done);
     }
 
     public boolean isLeaderConnection(ClientConnection conn) {
@@ -172,17 +171,16 @@ public class ConnectionToLeader {
     public void executeCommandFromLeader(ClientConnection conn, Command command)
             throws IOException {
         if (!isLeaderConnection(conn)) {
-            System.out.println(String.format(
-                    "ConnectionToLeader ERROR: executeCommandFromLeader called with non-leader connection: %s",
-                    conn));
+            System.out.printf(
+                    "ConnectionToLeader ERROR: executeCommandFromLeader called with non-leader connection: %s%n",
+                    conn);
             return;
         }
 
         if (command.isReplicatedCommand()) {
-            System.out.println(
-                    String.format("Received replicated command from leader: %s", conn));
+            System.out.printf("Received replicated command from leader: %s%n", conn);
         } else {
-            System.out.println(String.format("Received request from leader: %s", conn));
+            System.out.printf("Received request from leader: %s%n", conn);
         }
 
         // if the command came from the leader, then for most commands the leader does not
@@ -191,14 +189,14 @@ public class ConnectionToLeader {
 
         byte[] response = command.execute(service);
         if (writeResponse) {
-            System.out.println(String.format("Follower service sending %s response: %s",
-                    command.getType().name(), Command.responseLogString(response)));
+            System.out.printf("Follower service sending %s response: %s%n",
+                    command.getType().name(), Command.responseLogString(response));
             if (response != null && response.length > 0) {
                 conn.writeFlush(response);
             }
         } else {
-            System.out.println(String.format("Follower service do not send %s response: %s",
-                    command.getType().name(), Command.responseLogString(response)));
+            System.out.printf("Follower service do not send %s response: %s%n",
+                    command.getType().name(), Command.responseLogString(response));
         }
     }
 
@@ -206,9 +204,8 @@ public class ConnectionToLeader {
         if (!leaderConnection.equals(conn)) {
             return true;
         }
-        boolean isReplconfGetack = command instanceof ReplConfCommand && ((ReplConfCommand) command)
+        return command instanceof ReplConfCommand && ((ReplConfCommand) command)
                 .getOptionsMap().containsKey(ReplConfCommand.GETACK_NAME);
-        return isReplconfGetack;
     }
 
     private static class CommandAndResponseConsumer {

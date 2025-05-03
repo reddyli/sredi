@@ -18,9 +18,6 @@ public class CommandConstructor {
     }
 
     Command getCommand(RespArrayValue array) {
-        // if the array was read from a ClientConnection input stream, then it
-        // carries the context of the start bytes offset for ReplConf GETACK commandName
-        // - otherwise, just default to 0L
         long arrayStartBytesOffset = array.getContext() == null ? 0L
                 : array.getContext().getStartBytesOffset();
         String commandName = getCommandName(array.getValues()[0]);

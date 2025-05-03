@@ -64,22 +64,19 @@ public class LeaderService extends CentralRepository {
                 ConnectionToFollower follower = iter.next();
                 ClientConnection clientConnection = follower.getFollowerConnection();
                 if (clientConnection.isClosed()) {
-                    System.out.println(String.format("Follower connection closed: %s", conn));
+                    System.out.printf("Follower connection closed: %s%n", conn);
                     iter.remove();
                     continue;
                 }
                 if (clientConnection != conn) {
-                    // WORKARDOUND for codecrafters integration test "replication-17"
-                    // once we send the first replicated command, then stop hardcoding the replconf
-                    // ack
                     follower.setTestingDontWaitForAck(false);
                     ReplConfAckManager.INSTANCE.setTestingDontWaitForAck(false);
                     try {
                         clientConnection.writeFlush(command.asCommand());
                     } catch (IOException e) {
-                        System.out.println(String.format(
-                                "Follower exception during replication connection: %s, exception: %s",
-                                conn, e.getMessage()));
+                        System.out.printf(
+                                "Follower exception during replication connection: %s, exception: %s%n",
+                                conn, e.getMessage());
                     }
                 }
             }

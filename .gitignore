@@ -32,3 +32,6 @@ build/
 .idea/
 gradle/
 out/
+.vscode/launch.json
+.vscode/settings.json
+build.gradle
