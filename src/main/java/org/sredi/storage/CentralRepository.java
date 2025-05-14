@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -17,6 +18,7 @@ import java.util.stream.Collectors;
 
 import lombok.Getter;
 import org.sredi.commands.Command;
+import org.sredi.commands.Command.Type;
 import org.sredi.commands.EofCommand;
 import org.sredi.commands.TerminateCommand;
 import org.sredi.constants.ReplicationConstants;
@@ -50,6 +52,7 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
     private final String role;
     protected final Clock clock;
     private final Map<String, StoredData> dataStore = new ConcurrentHashMap<>();
+    protected final Map<ClientConnection, List<Command>> transactionQueues = new ConcurrentHashMap<>();
 
     public static CentralRepository newInstance(SetupOptions options, Clock clock) {
         String role = options.getRole();
@@ -204,6 +207,14 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
 
     public abstract void execute(Command command, ClientConnection conn) throws IOException;
 
+    public void execute(Command command) throws IOException {
+        ClientConnection currentConn = getCurrentConnection();
+        if (currentConn == null) {
+            throw new IllegalStateException("No active connection");
+        }
+        execute(command, currentConn);
+    }
+
     public boolean isExpired(StoredData storedData) {
         long now = clock.millis();
         return storedData.isExpired(now);
@@ -280,6 +291,9 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
     void executeCommand(ClientConnection conn, Command command) throws IOException {
         System.out.printf("Received client command: %s%n", command);
 
+        // Set the current connection for transaction handling
+        setCurrentConnection(conn);
+
         if (command.isBlockingCommand()) {
             commandsExecutorService.submit(() -> {
                 try {
@@ -305,6 +319,24 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
         default -> {
             // no action for other command types
         }
+        }
+
+        // Clear the current connection
+        setCurrentConnection(null);
+    }
+
+    private ClientConnection currentConnection;
+    private final Object connectionLock = new Object();
+
+    private void setCurrentConnection(ClientConnection conn) {
+        synchronized (connectionLock) {
+            currentConnection = conn;
+        }
+    }
+
+    private ClientConnection getCurrentConnection() {
+        synchronized (connectionLock) {
+            return currentConnection;
         }
     }
 
@@ -353,6 +385,57 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
 
     public Collection<String> getKeys() {
         return dataStore.keySet();
+    }
+
+    public void startTransaction() {
+        ClientConnection currentConn = getCurrentConnection();
+        if (currentConn == null) {
+            throw new IllegalStateException("No active connection for transaction");
+        }
+        transactionQueues.put(currentConn, new ArrayList<>());
+    }
+
+    public void queueCommand(Command command) {
+        ClientConnection currentConn = getCurrentConnection();
+        if (currentConn == null) {
+            throw new IllegalStateException("No active connection for transaction");
+        }
+        List<Command> queue = transactionQueues.get(currentConn);
+        if (queue == null) {
+            throw new IllegalStateException("No active transaction");
+        }
+        queue.add(command);
+    }
+
+    public byte[][] executeTransaction() {
+        ClientConnection currentConn = getCurrentConnection();
+        if (currentConn == null) {
+            throw new IllegalStateException("No active connection for transaction");
+        }
+        List<Command> queue = transactionQueues.remove(currentConn);
+        if (queue == null) {
+            return null; // No active transaction
+        }
+
+        byte[][] results = new byte[queue.size()][];
+        for (int i = 0; i < queue.size(); i++) {
+            try {
+                results[i] = queue.get(i).execute(this);
+            } catch (Exception e) {
+                // If any command fails, discard the transaction
+                transactionQueues.remove(currentConn);
+                throw e;
+            }
+        }
+        return results;
+    }
+
+    public void discardTransaction() {
+        ClientConnection currentConn = getCurrentConnection();
+        if (currentConn == null) {
+            throw new IllegalStateException("No active connection for transaction");
+        }
+        transactionQueues.remove(currentConn);
     }
 
 }

@@ -1,12 +1,16 @@
 package org.sredi.replication;
 
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import lombok.Getter;
 import lombok.Setter;
+import org.sredi.commands.Command;
 import org.sredi.commands.ReplConfCommand;
 import org.sredi.resp.RespSimpleStringValue;
 import org.sredi.resp.RespValue;
+import org.sredi.resp.RespValueParser;
+import org.sredi.storage.CentralRepository;
 
 public class ConnectionToFollower {
     private final LeaderService service;
@@ -45,6 +49,23 @@ public class ConnectionToFollower {
             System.out.println(String.format("sendAndWaitForReplConfAck: got response from replica: %s",
                     response));
             return response;
+        }
+    }
+
+    public void sendCommand(Command command) throws IOException {
+        ClientConnection clientConnection = getFollowerConnection();
+        if (clientConnection.isClosed()) {
+            System.out.printf("Follower connection closed: %s%n", clientConnection);
+            return;
+        }
+        setTestingDontWaitForAck(false);
+        ReplConfAckManager.INSTANCE.setTestingDontWaitForAck(false);
+        try {
+            clientConnection.writeFlush(command.asCommand());
+        } catch (IOException e) {
+            System.out.printf(
+                    "Follower exception during replication connection: %s, exception: %s%n",
+                    clientConnection, e.getMessage());
         }
     }
 

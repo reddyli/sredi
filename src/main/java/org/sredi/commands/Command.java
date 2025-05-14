@@ -10,7 +10,7 @@ import org.sredi.resp.RespValue;
 
 public abstract class Command {
     public enum Type {
-        CONFIG, DEL, ECHO, GET,INCR, INFO, KEYS, PING, PSYNC, REPLCONF, SET, TYPE, WAIT, XADD, XRANGE,
+        CONFIG, DEL, ECHO, GET, INCR, INFO, KEYS, MULTI, EXEC, DISCARD, PING, PSYNC, REPLCONF, SET, TYPE, WAIT, XADD, XRANGE,
         XREAD,
         EOF, // close a client connection
         TERMINATE; // close all connections and kill the server

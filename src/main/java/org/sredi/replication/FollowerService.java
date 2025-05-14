@@ -3,13 +3,16 @@ package org.sredi.replication;
 import java.io.IOException;
 import java.net.Socket;
 import java.time.Clock;
+import java.util.List;
 import java.util.Map;
 
 import org.sredi.commands.Command;
+import org.sredi.commands.Command.Type;
 import org.sredi.commands.ReplConfCommand;
 import org.sredi.resp.RespArrayValue;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespConstants;
+import org.sredi.resp.RespSimpleStringValue;
 import org.sredi.resp.RespValue;
 import org.sredi.setup.SetupOptions;
 import org.sredi.storage.CentralRepository;
@@ -82,14 +85,19 @@ public class FollowerService extends CentralRepository {
 
     @Override
     public void execute(Command command, ClientConnection conn) throws IOException {
-        if (leaderConnection.isLeaderConnection(conn)) {
-            leaderConnection.executeCommandFromLeader(conn, command);
-        } else {
-            System.out.printf("Executing command from non-leader connection: %s%n", conn);
-            byte[] response = command.execute(this);
-            if (response != null && response.length > 0) {
-                conn.writeFlush(response);
-            }
+        // Check if we're in a transaction
+        List<Command> queue = transactionQueues.get(conn);
+        if (queue != null && command.getType() != Type.MULTI && command.getType() != Type.EXEC && command.getType() != Type.DISCARD) {
+            // Queue the command instead of executing it
+            queueCommand(command);
+            conn.sendResponse(new RespSimpleStringValue("QUEUED").asResponse());
+            return;
+        }
+
+        // Execute the command
+        byte[] response = command.execute(this);
+        if (response != null) {
+            conn.sendResponse(response);
         }
     }
 

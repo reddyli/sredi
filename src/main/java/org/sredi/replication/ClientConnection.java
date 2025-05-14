@@ -123,4 +123,10 @@ public class ClientConnection {
         }
     }
 
+    public void sendResponse(byte[] response) throws IOException {
+        if (response != null && response.length > 0) {
+            writeFlush(response);
+        }
+    }
+
 }

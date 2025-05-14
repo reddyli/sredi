@@ -5,6 +5,7 @@ import java.time.Clock;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -46,43 +47,26 @@ public class LeaderService extends CentralRepository {
 
     @Override
     public void execute(Command command, ClientConnection conn) throws IOException {
-        // for the leader, return the command response and replicate to the followers
-        byte[] response = command.execute(this);
-        // Note: first complete replication before sending the response
+        // Check if we're in a transaction
+        List<Command> queue = transactionQueues.get(conn);
+        if (queue != null && command.getType() != Type.MULTI && command.getType() != Type.EXEC && command.getType() != Type.DISCARD) {
+            // Queue the command instead of executing it
+            queueCommand(command);
+            conn.sendResponse(new RespSimpleStringValue("QUEUED").asResponse());
+            return;
+        }
 
-        // check if it is a new follower
-        String connectionString = conn.getConnectionString();
-        if (command.getType() == Type.PSYNC && !replMap.containsKey(connectionString)) {
-            // This command is the final handshake command.
-            // Save the connection as a follower so that future commands will be replicated to it
-            replMap.put(connectionString, new ConnectionToFollower(this, conn));
+        // Execute the command
+        byte[] response = command.execute(this);
+        if (response != null) {
+            conn.sendResponse(response);
         }
-        // replicate to the followers
+
+        // If this is a replicated command, send it to followers
         if (command.isReplicatedCommand()) {
-            Iterator<ConnectionToFollower> iter = replMap.values().iterator();
-            while (iter.hasNext()) {
-                ConnectionToFollower follower = iter.next();
-                ClientConnection clientConnection = follower.getFollowerConnection();
-                if (clientConnection.isClosed()) {
-                    System.out.printf("Follower connection closed: %s%n", conn);
-                    iter.remove();
-                    continue;
-                }
-                if (clientConnection != conn) {
-                    follower.setTestingDontWaitForAck(false);
-                    ReplConfAckManager.INSTANCE.setTestingDontWaitForAck(false);
-                    try {
-                        clientConnection.writeFlush(command.asCommand());
-                    } catch (IOException e) {
-                        System.out.printf(
-                                "Follower exception during replication connection: %s, exception: %s%n",
-                                conn, e.getMessage());
-                    }
-                }
+            for (ConnectionToFollower follower : replMap.values()) {
+                follower.sendCommand(command);
             }
-        }
-        if (response != null && response.length > 0) {
-            conn.writeFlush(response);
         }
     }
 

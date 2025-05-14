@@ -29,6 +29,9 @@ public class CommandConstructor {
         case INCR -> new IncrCommand();
         case INFO -> new InfoCommand();
         case KEYS -> new KeysCommand();
+        case MULTI -> new MultiCommand();
+        case EXEC -> new ExecCommand();
+        case DISCARD -> new DiscardCommand();
         case PING -> new PingCommand();
         case PSYNC -> new PsyncCommand();
         case REPLCONF -> new ReplConfCommand(array.getContext().getClientConnection(), arrayStartBytesOffset);
