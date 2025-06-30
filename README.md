@@ -1,13 +1,13 @@
-# sredi
+# SREDI
 
-A distributed In-Memory storage system written in Java.
+A Distributed In-Memory storage system written in Java.
 
 ## Overview
 
 sredi is a lightweight, high-performance data structure server that supports:
 - Key-value storage
 - Stream data types
-- Replication (leader-follower model)
+- Asynchronous Replication (Leader-follower model)
 - Persistence with RDB files
 - Transactions
 
@@ -21,18 +21,22 @@ sredi is a lightweight, high-performance data structure server that supports:
 
 ## Getting Started
 
-### Prerequisites
-- Java 11 or higher
-- Gradle
+### Docker
 
-### Running the Server
+You can quickly get started with sredi using Docker:
 
 ```bash
-# Start as leader
-java -jar sredi.jar --port 6379
+# Pull the image
+docker pull reddyli/sredi
 
-# Start as follower
-java -jar sredi.jar --port 6380 --replicaof localhost 6379
+# Run as leader
+docker run -p 6379:6379 reddyli/sredi
+
+# Run as follower (replace <leader-host> with the actual leader host)
+docker run -p 6380:6379 reddyli/sredi --replicaof <leader-host> 6379
+
+# Run with custom configuration
+docker run -p 6379:6379 -v /path/to/data:/data reddyli/sredi --dir /data --dbfilename dump.rdb
 ```
 
 ### Configuration Options
