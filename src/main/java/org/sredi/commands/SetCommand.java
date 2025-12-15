@@ -24,7 +24,7 @@ public class SetCommand extends Command {
             ":string", // command name
             ":string", // key
             ":string", // value
-            "[nx, xx]",
+            "[nx xx]",
             "[get]",
             "[ex:int px:int exat:int pxatt:int keepttl]"
     });

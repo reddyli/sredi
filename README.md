@@ -1,53 +1,69 @@
 # SREDI
 
-A Distributed In-Memory storage system written in Java.
-
-## Overview
-
-sredi is a lightweight, high-performance data structure server that supports:
-- Key-value storage
-- Stream data types
-- Asynchronous Replication (Leader-follower model)
-- Persistence with RDB files
-- Transactions
+A High Performance,distributed in-memory storage system written in Java.
 
 ## Features
 
-- **Commands**: GET, SET, DEL, INCR, TYPE, KEYS
-- **Streams**: XADD, XRANGE, XREAD
-- **Replication**: PSYNC, REPLCONF, WAIT
-- **Transactions**: MULTI, DISCARD
-- **Server Info**: INFO, PING
+| Category | Supported |
+|----------|-----------|
+| Commands | GET, SET, INCR, TYPE, KEYS |
+| Streams | XADD, XRANGE, XREAD |
+| Replication | PSYNC, REPLCONF, WAIT |
+| Transactions | MULTI, EXEC, DISCARD |
+| Persistence | RDB file reading |
+| Protocol | RESP (Redis Serialization Protocol) |
 
 ## Getting Started
 
 ### Docker
 
-You can quickly get started with sredi using Docker:
-
 ```bash
-# Pull the image
-docker pull reddyli/sredi
-
 # Run as leader
 docker run -p 6379:6379 reddyli/sredi
 
-# Run as follower (replace <leader-host> with the actual leader host)
+# Run as follower
 docker run -p 6380:6379 reddyli/sredi --replicaof <leader-host> 6379
 
-# Run with custom configuration
+# Run with persistence
 docker run -p 6379:6379 -v /path/to/data:/data reddyli/sredi --dir /data --dbfilename dump.rdb
 ```
 
-### Configuration Options
+### Configuration
 
-- `--port <port>`: Server port (default: 6379)
-- `--role <role>`: Server role (master/slave)
-- `--replicaof <host>`: Leader host for replication
-- `--replicaof-port <port>`: Leader port for replication
-- `--dir <directory>`: Directory for persistence files
-- `--dbfilename <filename>`: RDB filename for persistence
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--port` | Server port | 6379 |
+| `--replicaof` | Leader host for replication | - |
+| `--replicaof-port` | Leader port for replication | - |
+| `--dir` | Directory for persistence files | - |
+| `--dbfilename` | RDB filename | dump.rdb |
 
-### Protocol
 
-RESP (Redis Serialization Protocol) is implemented for client-server communication.
+## Architecture
+
+![Request Flow](src/main/resources/images/Request_Flow.png)
+
+
+## TODO
+
+- [ ] RESP Parser Tests
+- [ ] Command Tests (GET, SET, INCR, KEYS, TYPE)
+- [ ] Stream Tests (XADD, XRANGE, XREAD)
+- [ ] RDB Tests
+- [ ] Integration Tests
+- [ ] DEL command
+- [ ] EXISTS command
+- [ ] EXPIRE/TTL/PERSIST commands
+- [ ] Lists (LPUSH, RPUSH, LPOP, RPOP, LRANGE, LLEN)
+- [ ] RDB Writing (SAVE/BGSAVE)
+- [ ] AOF
+- [ ] AOF Rewrite
+- [ ] SUBSCRIBE/UNSUBSCRIBE
+- [ ] PUBLISH
+- [ ] PSUBSCRIBE
+- [ ] Pipelining
+- [ ] AUTH
+- [ ] Memory Limits and LRU
+- [ ] Leader Election
+- [ ] Consistent Hashing
+- [ ] Gossip Protocol
