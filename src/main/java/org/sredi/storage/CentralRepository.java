@@ -17,6 +17,8 @@ import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 import lombok.Getter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sredi.commands.Command;
 import org.sredi.commands.Command.Type;
 import org.sredi.commands.EofCommand;
@@ -33,6 +35,7 @@ import org.sredi.streams.*;
 import org.sredi.streams.StreamData;
 
 public abstract class CentralRepository implements ReplicationServiceInfoProvider {
+    private static final Logger log = LoggerFactory.getLogger(CentralRepository.class);
 
     private static final Set<String> DEFAULT_SECTIONS = Set.of("server", "replication", "stats",
             "replication-graph");
@@ -84,8 +87,7 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
                     DatabaseReader reader = new DatabaseReader(dbFile, dataStore, clock);
                     reader.readDatabase();
                 } else {
-                    System.out.printf("Database file %s does not exist%n",
-                            dbFile.getAbsolutePath());
+                    log.warn("Database file {} does not exist", dbFile.getAbsolutePath());
                 }
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -98,7 +100,7 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
     public void start() throws IOException {
         serverSocket = new ServerSocket(port);
         serverSocket.setReuseAddress(true);
-        System.out.println("Server started. Listening on Port " + port);
+        log.info("Server started. Listening on Port {}", port);
 
         eventLoop = new EventLoop(this, commandConstructor);
 
@@ -114,10 +116,9 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
 
                     ClientConnection conn = new ClientConnection(clientSocket, valueParser);
                     connectionManager.addConnection(conn);
-                    System.out.printf("Connection accepted from client: %s, opened: %s%n", conn,
-                            !conn.isClosed());
+                    log.debug("Connection accepted from client: {}, opened: {}", conn, !conn.isClosed());
                 } catch (IOException e) {
-                    System.out.println("IOException on accept: " + e.getMessage());
+                    log.error("IOException on accept: {}", e.getMessage());
                 }
             }
 
@@ -275,21 +276,20 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
     }
 
     public void terminate() {
-        System.out.printf("Terminate invoked. Closing %d connections.%n",
-                connectionManager.getNumConnections());
+        log.info("Terminate invoked. Closing {} connections.", connectionManager.getNumConnections());
         eventLoop.terminate();
         done = true;
         // stop accepting new connections and shut down the accept connections thread
         try {
             closeSocket();
         } catch (IOException e) {
-            System.out.println("IOException on socket close: " + e.getMessage());
+            log.error("IOException on socket close: {}", e.getMessage());
         }
         shutdown();
     }
 
     void executeCommand(ClientConnection conn, Command command) throws IOException {
-        System.out.printf("Received client command: %s%n", command);
+        log.debug("Received client command: {}", command);
 
         // Set the current connection for transaction handling
         setCurrentConnection(conn);
@@ -299,10 +299,7 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
                 try {
                     execute(command, conn);
                 } catch (Exception e) {
-                    System.out.printf(
-                            "EventLoop Exception: %s \"%s\"%n",
-                            e.getClass().getSimpleName(), e.getMessage());
-                    e.printStackTrace();
+                    log.error("EventLoop Exception: {} \"{}\"", e.getClass().getSimpleName(), e.getMessage(), e);
                 }
             });
         } else {
@@ -364,10 +361,7 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
                         try {
                             service.executeCommand(conn, command);
                         } catch (Exception e) {
-                            System.out.printf(
-                                    "EventLoop Exception: %s \"%s\"%n",
-                                    e.getClass().getSimpleName(), e.getMessage());
-                            e.printStackTrace();
+                            log.error("EventLoop Exception: {} \"{}\"", e.getClass().getSimpleName(), e.getMessage(), e);
                             // since this is a blocking command, we better return an error response
                             conn.sendError(e.getMessage());
                         }
@@ -376,7 +370,6 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
 
                 // sleep a bit if there were no commands to be processed
                 if (!didProcess) {
-                    // System.out.println("sleep 1s");
                     Thread.sleep(80L);
                 }
             }

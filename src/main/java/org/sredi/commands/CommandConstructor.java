@@ -1,10 +1,13 @@
 package org.sredi.commands;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sredi.resp.RespArrayValue;
 import org.sredi.resp.RespType;
 import org.sredi.resp.RespValue;
 
 public class CommandConstructor {
+    private static final Logger log = LoggerFactory.getLogger(CommandConstructor.class);
 
     public Command newCommandFromValue(RespValue value) {
         if (value == null) {
@@ -45,7 +48,7 @@ public class CommandConstructor {
         case EOF -> new EofCommand();
         case TERMINATE -> new TerminateCommand();
         case null, default -> {
-            System.out.println("Unknown commandName: " + commandName);
+            log.warn("Unknown commandName: {}", commandName);
             yield null;
         }
         };

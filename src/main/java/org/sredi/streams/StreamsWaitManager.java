@@ -8,7 +8,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public final class StreamsWaitManager {
+    private static final Logger log = LoggerFactory.getLogger(StreamsWaitManager.class);
     private Map<Object, Set<String>> waitStreamSets = new ConcurrentHashMap<>();
 
     public static StreamsWaitManager INSTANCE = new StreamsWaitManager();
@@ -69,11 +73,7 @@ public final class StreamsWaitManager {
                     now = clock.millis();
                 }
             } catch (Exception e) {
-                e.printStackTrace();
-                System.out.println(String.format(
-                        "readWithWait: exception while reading from streams: %s %s",
-                        streams.keySet(),
-                        this));
+                log.error("readWithWait: exception while reading from streams: {} {}", streams.keySet(), this, e);
             } finally {
                 // clean up the lock now that we are done waiting
                 waitStreamSets.remove(lock);

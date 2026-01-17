@@ -8,6 +8,8 @@ import java.io.OutputStream;
 import java.net.Socket;
 import java.util.Objects;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sredi.io.BufferedInputLineReader;
 import org.sredi.io.BufferedResponseStreamWriter;
 import org.sredi.resp.RespSimpleErrorValue;
@@ -17,6 +19,7 @@ import org.sredi.resp.RespValueContext;
 import org.sredi.resp.RespValueParser;
 
 public class ClientConnection {
+    private static final Logger log = LoggerFactory.getLogger(ClientConnection.class);
     private final Socket clientSocket;
     private final RespValueParser valueParser;
     private InputStream inputStream;
@@ -116,10 +119,7 @@ public class ClientConnection {
         try {
             writeFlush(new RespSimpleErrorValue(message).asResponse());
         } catch (IOException e) {
-            System.out.println(String.format(
-                    "ClientConnection: exception while sending error response: %s, %s", message,
-                    e.getMessage()));
-            e.printStackTrace();
+            log.error("ClientConnection: exception while sending error response: {}, {}", message, e.getMessage(), e);
         }
     }
 

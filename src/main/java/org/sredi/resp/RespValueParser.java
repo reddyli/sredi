@@ -1,9 +1,13 @@
 package org.sredi.resp;
+
 import java.io.IOException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sredi.io.BufferedInputLineReader;
 
 public class RespValueParser {
+    private static final Logger log = LoggerFactory.getLogger(RespValueParser.class);
 
     public RespValue parse(BufferedInputLineReader reader) throws IOException {
         int type = reader.read();
@@ -16,7 +20,7 @@ public class RespValueParser {
             case BULK_STRING -> new RespBulkString(reader);
             case ARRAY -> new RespArrayValue(reader, this);
             case null, default -> {
-                System.out.println("Unknown type: " + type);
+                log.warn("Unknown type: {}", type);
                 yield null;
             }
 		};

@@ -2,12 +2,15 @@ package org.sredi.setup;
 
 import lombok.Getter;
 import org.apache.commons.cli.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sredi.constants.ReplicationConstants;
 
 import java.io.File;
 
 @Getter
 public class SetupOptions {
+    private static final Logger log = LoggerFactory.getLogger(SetupOptions.class);
     private int port = ReplicationConstants.DEFAULT_PORT;
     private String role = ReplicationConstants.MASTER;
     private String replicaof = null;
@@ -60,19 +63,19 @@ public class SetupOptions {
             // Check if the port option was provided
             if (cmd.hasOption("port")) {
                 port = Integer.parseInt(cmd.getOptionValue("port"));
-                System.out.println("Port specified: " + getPort());
+                log.info("Port specified: {}", getPort());
                 if (port <= 0 || port > 65535) {
                     throw new ParseException("Port must be less than or equal to 65535: " + port);
                 }
             } else {
-                System.out.println("No port specified, using default.");
+                log.info("No port specified, using default.");
             }
 
             if (cmd.hasOption("replicaof")) {
                 String[] replicaofStrings = cmd.getOptionValues("replicaof");
                 replicaof = replicaofStrings[0];
                 replicaofPort = Integer.parseInt(replicaofStrings[1]);
-                System.out.println("Replicaof specified: " + getReplicaof() + " " + getReplicaofPort());
+                log.info("Replicaof specified: {} {}", getReplicaof(), getReplicaofPort());
                 if (replicaofPort <= 0 || replicaofPort > 65535) {
                     throw new ParseException("Port must be less than or equal to 65535: " + replicaofPort);
                 }
@@ -82,7 +85,7 @@ public class SetupOptions {
 
             if (cmd.hasOption("dir")) {
                 dir = cmd.getOptionValue("dir");
-                System.out.println("Dir specified: " + getDir());
+                log.info("Dir specified: {}", getDir());
                 // check if dir is a valid directory
                 File dirFile = new File(getDir());
                 if (!dirFile.isDirectory()) {
@@ -92,11 +95,11 @@ public class SetupOptions {
 
             if (cmd.hasOption("dbfilename")) {
                 dbfilename = cmd.getOptionValue("dbfilename");
-                System.out.println("Dbfilename specified: " + getDbfilename());
+                log.info("Dbfilename specified: {}", getDbfilename());
             }
 
         } catch (ParseException e) {
-            System.err.println("Parsing failed. Reason: " + e.getMessage());
+            log.error("Parsing failed. Reason: {}", e.getMessage());
             HelpFormatter formatter = new HelpFormatter();
             formatter.printHelp("SetupOptions", options);
             return false;

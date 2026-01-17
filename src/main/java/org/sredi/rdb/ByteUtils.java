@@ -1,6 +1,10 @@
 package org.sredi.rdb;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class ByteUtils {
+    private static final Logger log = LoggerFactory.getLogger(ByteUtils.class);
 
     static boolean compareToString(char[] bytes, String s) {
         // compare the bytes to the string
@@ -36,7 +40,7 @@ public class ByteUtils {
 
     public static long decodeLongLittleEnd(byte... bytes) {
         // decode bytes to a long - little endian encoding
-        System.out.println(String.format("decodeLong: %s", formatBytesArray(bytes)));
+        log.debug("decodeLong: {}", formatBytesArray(bytes));
         long value = 0;
         for (int i = 0; i < bytes.length && i < Long.BYTES; i++) {
             byte byteVal = (byte) (bytes[i] & 0xFF);

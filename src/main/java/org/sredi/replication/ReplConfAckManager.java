@@ -7,10 +7,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sredi.commands.Command;
 import org.sredi.commands.ReplConfCommand;
 
 public final class ReplConfAckManager {
+    private static final Logger log = LoggerFactory.getLogger(ReplConfAckManager.class);
     private Map<Object, Set<ClientConnection>> waitFollowerSets = new ConcurrentHashMap<>();
     private Map<Object, Set<ClientConnection>> ackFollowerSets = new ConcurrentHashMap<>();
     private boolean testingDontWaitForAck = true;
@@ -64,19 +67,12 @@ public final class ReplConfAckManager {
                     // suspend this synchronized section and wait until the lock is notified that an
                     // ack has been received
                     lock.wait(start + timeoutMillis - now);
-                    System.out.println(String.format(
-                        "ReplConfAckManager: lock notified %d acks of %d requested",
-                        ackSet.size(),
-                        numToWaitFor));
+                    log.debug("ReplConfAckManager: lock notified {} acks of {} requested", ackSet.size(), numToWaitFor);
                     now = clock.millis();
                     result = ackSet.size();
                 }
             } catch (Exception e) {
-                e.printStackTrace();
-                System.out.println(String.format(
-                        "ReplConfAckManager: exception while waiting for acks: %s %s",
-                        followerSet,
-                        this));
+                log.error("ReplConfAckManager: exception while waiting for acks: {} {}", followerSet, this, e);
             } finally {
                 waitFollowerSets.remove(lock);
                 ackFollowerSets.remove(lock);
@@ -88,16 +84,11 @@ public final class ReplConfAckManager {
     private void sendCommand(ClientConnection connection) {
         ReplConfCommand ack = new ReplConfCommand(ReplConfCommand.Option.GETACK, "*");
         String ackString = new String(ack.asCommand()).toUpperCase();
-        System.out.println(String.format("ReplConfAckManager: Sending command '%s' to client '%s'",
-                Command.responseLogString(ackString.getBytes()), connection));
+        log.debug("ReplConfAckManager: Sending command '{}' to client '{}'", Command.responseLogString(ackString.getBytes()), connection);
         try {
             connection.writeFlush(ackString.getBytes());
         } catch (IOException e) {
-            e.printStackTrace();
-            System.out.println(String.format(
-                    "ReplConfAckManager: exception while send replconf command to connection: %s %s",
-                    connection,
-                    this));
+            log.error("ReplConfAckManager: exception while send replconf command to connection: {} {}", connection, this, e);
         }
     }
 

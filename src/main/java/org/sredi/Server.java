@@ -1,5 +1,7 @@
 package org.sredi;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sredi.setup.SetupOptions;
 import org.sredi.storage.CentralRepository;
 
@@ -7,6 +9,8 @@ import java.io.IOException;
 import java.time.Clock;
 
 public class Server implements Runnable {
+    private static final Logger log = LoggerFactory.getLogger(Server.class);
+
     SetupOptions options;
     CentralRepository repository = null;
 
@@ -22,12 +26,12 @@ public class Server implements Runnable {
         try {
             repository.start();
             repository.runCommandLoop();
-            System.out.println("Event loop terminated");
+            log.info("Event loop terminated");
 
         } catch (IOException e) {
-            System.out.println("IOException: " + e.getMessage());
+            log.error("IOException: {}", e.getMessage());
         } catch (InterruptedException e) {
-            System.out.println("InterruptedException: " + e.getMessage());
+            log.error("InterruptedException: {}", e.getMessage());
         } finally {
             repository.shutdown();
             repository = null;

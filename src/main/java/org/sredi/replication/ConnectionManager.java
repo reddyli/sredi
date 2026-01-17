@@ -11,9 +11,12 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.function.BiConsumer;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sredi.resp.RespValue;
 
 public class ConnectionManager {
+    private static final Logger log = LoggerFactory.getLogger(ConnectionManager.class);
     private final Deque<ClientConnection> clientSockets = new ConcurrentLinkedDeque<>();
     private final Map<ClientConnection, Queue<RespValue>> clientValues = new ConcurrentHashMap<>();
 
@@ -25,22 +28,18 @@ public class ConnectionManager {
                 for (; iter.hasNext();) {
                     ClientConnection conn = iter.next();
                     if (conn.isClosed()) {
-                        System.out.printf("Connection closed by the server: %s%n", conn);
+                        log.debug("Connection closed by the server: {}", conn);
                         clientValues.remove(conn);
                         iter.remove();
                     }
                     while (conn.available() > 0) {
                         didRead = true;
-                        System.out.printf(
-                                "ConnectionManager: about to read from connection, available: %d %s%n",
-                                conn.available(), conn);
+                        log.trace("ConnectionManager: about to read from connection, available: {} {}", conn.available(), conn);
                         RespValue value = null;
                         try {
                             value = conn.readValue();
                         } catch (Exception e) {
-                            System.out.printf(
-                                    "ConnectionManager read exception conn: %s %s \"%s\"%n", conn,
-                                    e.getClass().getSimpleName(), e.getMessage());
+                            log.error("ConnectionManager read exception conn: {} {} \"{}\"", conn, e.getClass().getSimpleName(), e.getMessage());
                         }
                         if (value != null) {
                             getClientValuesQueue(conn).offer(value);
@@ -50,7 +49,6 @@ public class ConnectionManager {
                 }
                 // if there was nothing to be read, then sleep a little
                 if (!didRead) {
-                    // System.out.println("sleep 1s");
                     Thread.sleep(80L);
                 }
             }
@@ -72,13 +70,12 @@ public class ConnectionManager {
     public void closeAllConnections() {
         for (ClientConnection conn : clientSockets) {
             try {
-                System.out.printf("Closing connection to client: %s, opened: %s%n",
-                        conn, !conn.isClosed());
+                log.debug("Closing connection to client: {}, opened: {}", conn, !conn.isClosed());
                 if (!conn.isClosed()) {
                     conn.close();
                 }
             } catch (IOException e) {
-                System.out.println("IOException: " + e.getMessage());
+                log.error("IOException: {}", e.getMessage());
             }
         }
     }
@@ -100,8 +97,7 @@ public class ConnectionManager {
                     foundValue = true;
                 }
             } catch (Exception e) {
-                System.out.printf("ConnectionManager nextValue exception conn: %s %s \"%s\"%n",
-                        conn, e.getClass().getSimpleName(), e.getMessage());
+                log.error("ConnectionManager nextValue exception conn: {} {} \"{}\"", conn, e.getClass().getSimpleName(), e.getMessage());
             }
         }
         return foundValue;

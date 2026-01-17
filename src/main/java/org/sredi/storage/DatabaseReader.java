@@ -8,10 +8,13 @@ import java.io.InputStream;
 import java.time.Clock;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sredi.rdb.OpCode;
 import org.sredi.rdb.RdbFileParser;
 
 public class DatabaseReader {
+    private static final Logger log = LoggerFactory.getLogger(DatabaseReader.class);
 
     private final File dbFile;
     private final Map<String, StoredData> dataStoreMap;
@@ -25,8 +28,8 @@ public class DatabaseReader {
 
     public void readDatabase() throws IOException {
         // open file and read as input stream
-        System.out.println("Reading database file: " + dbFile);
-        System.out.println("File size: " + dbFile.length());
+        log.info("Reading database file: {}", dbFile);
+        log.info("File size: {}", dbFile.length());
         InputStream dbFileInput = new FileInputStream(dbFile);
         try {
             RdbFileParser rdbFileParser = new RdbFileParser(new BufferedInputStream(dbFileInput), clock);

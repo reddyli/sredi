@@ -5,9 +5,12 @@ import java.io.IOException;
 import java.time.Clock;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sredi.storage.StoredData;
 
 public class RdbFileParser {
+    private static final Logger log = LoggerFactory.getLogger(RdbFileParser.class);
 
     private final RdbParsePrimitives reader;
     private Clock clock;
@@ -20,13 +23,13 @@ public class RdbFileParser {
     public OpCode initDB() throws IOException {
         reader.readHeader();
         String dbVersion = new String(reader.readChars(4));
-        System.out.println("DB Version: " + dbVersion);
+        log.info("DB Version: {}", dbVersion);
         return reader.readCode();
     }
 
     public OpCode selectDB(Map<String, StoredData> dbData) throws IOException {
         int dbNumber = reader.readValue(reader.read()).getValue();
-        System.out.println("Select DB: " + dbNumber);
+        log.info("Select DB: {}", dbNumber);
         int next = reader.read();
         OpCode nextCode = OpCode.fromCode(next);
         if (nextCode == OpCode.RESIZEDB) {
@@ -37,8 +40,7 @@ public class RdbFileParser {
         while (nextCode == null
                 || nextCode == OpCode.EXPIRETIME
                 || nextCode == OpCode.EXPIRETIMEMS) {
-            System.out
-                    .println("Next code at file index: " + nextCode + " " + reader.file.readCount);
+            log.debug("Next code at file index: {} {}", nextCode, reader.file.readCount);
             Long expiryTime = null;
             if (nextCode == OpCode.EXPIRETIME) {
                 // read 4 bytes for expiry time in seconds
@@ -71,7 +73,7 @@ public class RdbFileParser {
             } else {
                 keyBytes = keyLength.getString().getBytes();
             }
-            System.out.println("Read key: " + new String(keyBytes) + " with expiry: " + expiryTime);
+            log.debug("Read key: {} with expiry: {}", new String(keyBytes), expiryTime);
             next = reader.read();
             EncodedValue value = reader.readValue(next);
             if (valueType != 0 || !value.isInt()) {
@@ -91,7 +93,7 @@ public class RdbFileParser {
                 StoredData valueData = new StoredData(valueBytes, now, ttlMillis);
                 dbData.put(new String(keyBytes), valueData);
             } else {
-                System.out.println("Skipping expired key: " + new String(keyBytes));
+                log.debug("Skipping expired key: {}", new String(keyBytes));
             }
 
             next = reader.read();
@@ -111,7 +113,6 @@ public class RdbFileParser {
     public void skipResizeDb() throws IOException {
         EncodedValue dbSize = reader.readValue(reader.read());
         EncodedValue expirySize = reader.readValue(reader.read());
-        System.out.println(String.format("Skipping RESIZEDB dbSize: %s, expirySize: %s",
-                dbSize.getValue(), expirySize.getValue()));
+        log.debug("Skipping RESIZEDB dbSize: {}, expirySize: {}", dbSize.getValue(), expirySize.getValue());
     }
 }

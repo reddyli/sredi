@@ -8,6 +8,8 @@ import java.util.concurrent.Executors;
 import java.util.function.BiFunction;
 
 import lombok.Getter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sredi.commands.Command;
 import org.sredi.commands.PingCommand;
 import org.sredi.commands.PsyncCommand;
@@ -17,6 +19,7 @@ import org.sredi.resp.RespValue;
 import org.sredi.resp.RespValueParser;
 
 public class ConnectionToLeader {
+    private static final Logger log = LoggerFactory.getLogger(ConnectionToLeader.class);
     // keep a list of socket connections and continue checking for new connections
     private final FollowerService service;
     private final ClientConnection leaderConnection;
@@ -35,23 +38,21 @@ public class ConnectionToLeader {
         valueParser = new RespValueParser();
 
         leaderConnection = new ClientConnection(service.getLeaderClientSocket(), valueParser);
-        System.out.println(String.format("Connection to leader: %s, isOpened: %s", leaderConnection,
-                !leaderConnection.isClosed()));
+        log.info("Connection to leader: {}, isOpened: {}", leaderConnection, !leaderConnection.isClosed());
 
         // create the thread for sending handshake commands to the leader
         executor.execute(() -> {
             try {
                 runHandshakeLoop();
             } catch (InterruptedException e) {
-                System.out
-                        .println("InterruptedException on send command thread: " + e.getMessage());
+                log.error("InterruptedException on send command thread: {}", e.getMessage());
                 terminate();
             }
         });
     }
 
     public void startHandshake() {
-        System.out.println("Starting handshake with leader");
+        log.info("Starting handshake with leader");
         sendCommand(new PingCommand(), (cmd, response) -> {
             ReplConfCommand conf1 = new ReplConfCommand(ReplConfCommand.Option.LISTENING_PORT,
                     String.valueOf(service.getPort()));
@@ -62,7 +63,7 @@ public class ConnectionToLeader {
                     sendCommand(psync, (psyncCmd, response4) -> {
                         if (response4.isSimpleString() && response4.getValueAsString().toUpperCase()
                                 .startsWith("FULLRESYNC")) {
-                            System.out.println("Full resync - looking for rdb response");
+                            log.debug("Full resync - looking for rdb response");
                             return true;
                         }
                         if (!response4.isBulkString()) {
@@ -70,7 +71,7 @@ public class ConnectionToLeader {
                                     String.format("Unexpected response: %s", response4));
                         }
                         setFullResyncRdb((RespBulkString) response4);
-                        System.out.println("Handshake completed");
+                        log.info("Handshake completed");
                         handshakeBytesReceived = leaderConnection.getNumBytesReceived();
 
                         // after the handshake, allow the ConnectionManager to poll for commands
@@ -103,14 +104,13 @@ public class ConnectionToLeader {
     }
 
     public void terminate() {
-        System.out.printf("Terminate follower invoked. Closing socket to leader %s.%n",
-                service.getLeaderClientSocket());
+        log.info("Terminate follower invoked. Closing socket to leader {}.", service.getLeaderClientSocket());
         done = true;
         // close the connection to the leader
         try {
             service.getLeaderClientSocket().close();
         } catch (IOException e) {
-            System.out.println("IOException on socket close: " + e.getMessage());
+            log.error("IOException on socket close: {}", e.getMessage());
         }
         // executor close - waits for thread to finish
         executor.close();
@@ -119,9 +119,7 @@ public class ConnectionToLeader {
     public void runHandshakeLoop() throws InterruptedException {
         while (!done) {
             if (leaderConnection.isClosed()) {
-                System.out.printf(
-                        "Terminating repository due to connection is closed by leader during handshake: %s%n",
-                        leaderConnection);
+                log.warn("Terminating repository due to connection is closed by leader during handshake: {}", leaderConnection);
                 terminate();
                 continue;
             }
@@ -131,12 +129,12 @@ public class ConnectionToLeader {
                 while (!commandsToLeader.isEmpty()) {
                     CommandAndResponseConsumer cmd = commandsToLeader.pollFirst();
                     // send the command to the leader
-                    System.out.printf("Sending leader command: %s%n", cmd.command);
+                    log.debug("Sending leader command: {}", cmd.command);
                     leaderConnection.writeFlush(cmd.command.asCommand());
 
                     // read the response - will wait on the stream until the whole value is parsed
                     RespValue response = leaderConnection.readValue();
-                    System.out.printf("Received leader response: %s%n", response);
+                    log.debug("Received leader response: {}", response);
 
                     // responseConsumer returns True if we expect the RDB value from the command
                     if (cmd.responseConsumer.apply(cmd.command, response)) {
@@ -144,24 +142,20 @@ public class ConnectionToLeader {
                             byte[] rdb = leaderConnection.readRDB();
 
                             response = new RespBulkString(rdb);
-                            System.out.printf("Received leader RDB: %s%n", response);
+                            log.debug("Received leader RDB: {}", response);
                             cmd.responseConsumer.apply(cmd.command, response);
                         } catch (IOException e) {
-                            System.out.printf(
-                                    "ConnectionToLeader: IOException on readRDB: %s %s%n",
-                                    e.getClass().getSimpleName(), e.getMessage());
+                            log.error("ConnectionToLeader: IOException on readRDB: {} {}", e.getClass().getSimpleName(), e.getMessage());
                         }
                     }
                 }
                 // sleep a bit before the next handshake command
                 Thread.sleep(50L);
             } catch (Exception e) {
-                System.out.printf("ConnectionToLeader Loop Exception: %s \"%s\"%n",
-                        e.getClass().getSimpleName(), e.getMessage());
+                log.error("ConnectionToLeader Loop Exception: {} \"{}\"", e.getClass().getSimpleName(), e.getMessage());
             }
         }
-        System.out.printf(
-                "Exiting thread for handshake commands - done: %s%n", done);
+        log.debug("Exiting thread for handshake commands - done: {}", done);
     }
 
     public boolean isLeaderConnection(ClientConnection conn) {
@@ -171,16 +165,14 @@ public class ConnectionToLeader {
     public void executeCommandFromLeader(ClientConnection conn, Command command)
             throws IOException {
         if (!isLeaderConnection(conn)) {
-            System.out.printf(
-                    "ConnectionToLeader ERROR: executeCommandFromLeader called with non-leader connection: %s%n",
-                    conn);
+            log.error("ConnectionToLeader ERROR: executeCommandFromLeader called with non-leader connection: {}", conn);
             return;
         }
 
         if (command.isReplicatedCommand()) {
-            System.out.printf("Received replicated command from leader: %s%n", conn);
+            log.debug("Received replicated command from leader: {}", conn);
         } else {
-            System.out.printf("Received request from leader: %s%n", conn);
+            log.debug("Received request from leader: {}", conn);
         }
 
         // if the command came from the leader, then for most commands the leader does not
@@ -189,14 +181,12 @@ public class ConnectionToLeader {
 
         byte[] response = command.execute(service);
         if (writeResponse) {
-            System.out.printf("Follower service sending %s response: %s%n",
-                    command.getType().name(), Command.responseLogString(response));
+            log.debug("Follower service sending {} response: {}", command.getType().name(), Command.responseLogString(response));
             if (response != null && response.length > 0) {
                 conn.writeFlush(response);
             }
         } else {
-            System.out.printf("Follower service do not send %s response: %s%n",
-                    command.getType().name(), Command.responseLogString(response));
+            log.trace("Follower service do not send {} response: {}", command.getType().name(), Command.responseLogString(response));
         }
     }
 

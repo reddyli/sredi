@@ -39,7 +39,7 @@ docker run -p 6379:6379 -v /path/to/data:/data reddyli/sredi --dir /data --dbfil
 | `--dbfilename` | RDB filename | dump.rdb |
 
 
-## Architecture
+## Flow
 
 ![Request Flow](src/main/resources/images/Request_Flow.png)
 

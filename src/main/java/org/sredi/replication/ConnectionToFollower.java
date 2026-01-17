@@ -5,6 +5,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import lombok.Getter;
 import lombok.Setter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sredi.commands.Command;
 import org.sredi.commands.ReplConfCommand;
 import org.sredi.resp.RespSimpleStringValue;
@@ -13,6 +15,7 @@ import org.sredi.resp.RespValueParser;
 import org.sredi.storage.CentralRepository;
 
 public class ConnectionToFollower {
+    private static final Logger log = LoggerFactory.getLogger(ConnectionToFollower.class);
     private final LeaderService service;
     @Getter
     private final ClientConnection followerConnection;
@@ -33,21 +36,18 @@ public class ConnectionToFollower {
     public RespValue sendAndWaitForReplConfAck(long timeoutMillis) throws IOException, InterruptedException {
         ReplConfCommand ack = new ReplConfCommand(ReplConfCommand.Option.GETACK, "*");
         String ackString = new String(ack.asCommand()).toUpperCase();
-        System.out.println(String.format("sendAndWaitForReplConfAck: Sending command %s",
-                ackString.replace("\r\n", "\\r\\n")));
+        log.debug("sendAndWaitForReplConfAck: Sending command {}", ackString.replace("\r\n", "\\r\\n"));
         followerConnection.writeFlush(ackString.getBytes());
 
         if (testingDontWaitForAck) {
             String response = "REPLCONF ACK 0";
-            System.out.println(String.format(
-                    "sendAndWaitForReplConfAck: not waiting, harcoded response: \"%s\"", response));
+            log.debug("sendAndWaitForReplConfAck: not waiting, hardcoded response: \"{}\"", response);
             return new RespSimpleStringValue(response);
         } else {
-            System.out.println("sendAndWaitForReplConfAck: waiting for REPLCONF ACK");
+            log.debug("sendAndWaitForReplConfAck: waiting for REPLCONF ACK");
             followerConnection.waitForNewValueAvailable(timeoutMillis);
             RespValue response = service.getConnectionManager().getNextValue(followerConnection);
-            System.out.println(String.format("sendAndWaitForReplConfAck: got response from replica: %s",
-                    response));
+            log.debug("sendAndWaitForReplConfAck: got response from replica: {}", response);
             return response;
         }
     }
@@ -55,7 +55,7 @@ public class ConnectionToFollower {
     public void sendCommand(Command command) throws IOException {
         ClientConnection clientConnection = getFollowerConnection();
         if (clientConnection.isClosed()) {
-            System.out.printf("Follower connection closed: %s%n", clientConnection);
+            log.warn("Follower connection closed: {}", clientConnection);
             return;
         }
         setTestingDontWaitForAck(false);
@@ -63,9 +63,7 @@ public class ConnectionToFollower {
         try {
             clientConnection.writeFlush(command.asCommand());
         } catch (IOException e) {
-            System.out.printf(
-                    "Follower exception during replication connection: %s, exception: %s%n",
-                    clientConnection, e.getMessage());
+            log.error("Follower exception during replication connection: {}, exception: {}", clientConnection, e.getMessage());
         }
     }
 
