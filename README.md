@@ -1,6 +1,6 @@
 # SREDI
 
-A High Performance,distributed in-memory storage system written in Java.
+A High Performance, distributed in-memory storage system written in Java.
 
 ## Features
 
@@ -39,28 +39,14 @@ docker run -p 6379:6379 -v /path/to/data:/data reddyli/sredi --dir /data --dbfil
 | `--dbfilename` | RDB filename | dump.rdb |
 
 
-## Flow
-
-![Request Flow](src/main/resources/images/Request_Flow.png)
-
-
 ## TODO
 
-- [ ] RESP Parser Tests
-- [ ] Command Tests (GET, SET, INCR, KEYS, TYPE)
-- [ ] Stream Tests (XADD, XRANGE, XREAD)
-- [ ] RDB Tests
-- [ ] Integration Tests
 - [ ] DEL command
 - [ ] EXISTS command
-- [ ] EXPIRE/TTL/PERSIST commands
 - [ ] Lists (LPUSH, RPUSH, LPOP, RPOP, LRANGE, LLEN)
 - [ ] RDB Writing (SAVE/BGSAVE)
 - [ ] AOF
 - [ ] AOF Rewrite
-- [ ] SUBSCRIBE/UNSUBSCRIBE
-- [ ] PUBLISH
-- [ ] PSUBSCRIBE
 - [ ] Pipelining
 - [ ] AUTH
 - [ ] Memory Limits and LRU
