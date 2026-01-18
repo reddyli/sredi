@@ -39,19 +39,14 @@ public class DatabaseReader {
                 dbCode = rdbFileParser.skipAux();
             }
             // db code should be SELECTDB now.
+            String format = String.format("Database unexpected OpCode: 0x%X not equal to 0x%X",
+                    dbCode.getCode(), OpCode.SELECTDB.getCode());
             if (dbCode != OpCode.SELECTDB) {
                 throw new IOException(
-                        String.format("Database unexpected OpCode: 0x%X not equal to 0x%X",
-                                dbCode.getCode(), OpCode.SELECTDB.getCode()));
+                        format);
             }
             // select DB (0)
-            if (dbCode == OpCode.SELECTDB) {
-                rdbFileParser.selectDB(dataStoreMap);
-            } else {
-                throw new IOException(
-                        String.format("Database unexpected OpCode: 0x%X not equal to 0x%X",
-                                dbCode.getCode(), OpCode.SELECTDB.getCode()));
-            }
+            rdbFileParser.selectDB(dataStoreMap);
         } finally {
             // close file
             dbFileInput.close();

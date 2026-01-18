@@ -1,5 +1,8 @@
 package org.sredi.rdb;
 
+import lombok.Getter;
+
+@Getter
 public enum OpCode {
     EOF(0xFF), // End of the RDB file
     SELECTDB(0xFE), // Database Selector
@@ -8,14 +11,10 @@ public enum OpCode {
     RESIZEDB(0xFB), // Hash table sizes for the main keyspace and expires, see Resizedb information
     AUX(0xFA); // Auxiliary fields. Arbitrary key-value settings, see Auxiliary fields
 
-    private byte code;
+    private final byte code;
 
     OpCode(int code) {
         this.code = (byte) code;
-    }
-
-    public byte getCode() {
-        return code;
     }
 
     public static OpCode fromCode(int code) {

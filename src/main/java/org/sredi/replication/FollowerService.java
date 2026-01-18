@@ -3,7 +3,6 @@ package org.sredi.replication;
 import java.io.IOException;
 import java.net.Socket;
 import java.time.Clock;
-import java.util.List;
 import java.util.Map;
 
 import org.sredi.commands.Command;
@@ -86,9 +85,7 @@ public class FollowerService extends CentralRepository {
     @Override
     public void execute(Command command, ClientConnection conn) throws IOException {
         // Check if we're in a transaction
-        List<Command> queue = transactionQueues.get(conn);
-        if (queue != null && command.getType() != Type.MULTI && command.getType() != Type.EXEC && command.getType() != Type.DISCARD) {
-            // Queue the command instead of executing it
+        if (hasActiveTransaction(conn) && isQueueableCommand(command)) {
             queueCommand(command);
             conn.sendResponse(new RespSimpleStringValue("QUEUED").asResponse());
             return;
