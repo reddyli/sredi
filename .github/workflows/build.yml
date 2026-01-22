@@ -2,7 +2,7 @@ name: Build and Test
 
 on:
   push:
-    branches: [main, master]
+    branches: ['*']
   pull_request:
     branches: [main, master]
 
@@ -20,8 +20,8 @@ jobs:
           java-version: '23'
           distribution: 'temurin'
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Build
         run: ./gradlew build -x test
