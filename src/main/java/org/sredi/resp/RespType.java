@@ -6,7 +6,7 @@ public enum RespType {
     BULK_STRING('$'),
     ARRAY('*');
 
-    char typePrefix;
+    final char typePrefix;
 
     RespType(char typePrefix) {
         this.typePrefix = typePrefix;

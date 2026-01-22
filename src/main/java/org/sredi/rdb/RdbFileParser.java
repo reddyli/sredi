@@ -13,7 +13,7 @@ public class RdbFileParser {
     private static final Logger log = LoggerFactory.getLogger(RdbFileParser.class);
 
     private final RdbParsePrimitives reader;
-    private Clock clock;
+    private final Clock clock;
 
     public RdbFileParser(BufferedInputStream file, Clock clock) {
         reader = new RdbParsePrimitives(file);

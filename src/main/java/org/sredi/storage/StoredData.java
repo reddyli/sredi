@@ -3,8 +3,10 @@ package org.sredi.storage;
 import java.util.Arrays;
 import java.util.Objects;
 
+import lombok.Getter;
 import org.sredi.streams.StreamData;
 
+@Getter
 public class StoredData {
     private final byte[] value;
     private final StreamData streamValue;
@@ -26,26 +28,6 @@ public class StoredData {
         this.type = StoredDataType.STRING;
         this.storedAt = storedAt;
         this.ttlMillis = ttlMillis;
-    }
-
-    public byte[] getValue() {
-        return value;
-    }
-
-    public StreamData getStreamValue() {
-        return streamValue;
-    }
-
-    public StoredDataType getType() {
-        return type;
-    }
-
-    public long getStoredAt() {
-        return storedAt;
-    }
-
-    public Long getTtlMillis() {
-        return ttlMillis;
     }
 
     public boolean isExpired(long currentTimeMillis) {

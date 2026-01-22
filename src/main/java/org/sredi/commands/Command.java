@@ -5,9 +5,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
+import lombok.Getter;
 import org.sredi.storage.CentralRepository;
 import org.sredi.resp.RespValue;
 
+@Getter
 public abstract class Command {
     public enum Type {
         CONFIG, DEL, ECHO, GET, INCR, INFO, KEYS, MULTI, EXEC, DISCARD, PING, PSYNC, REPLCONF, SET, TYPE, WAIT, XADD, XRANGE,
@@ -28,10 +30,6 @@ public abstract class Command {
 
     public Command(Type type) {
         this.type = type;
-    }
-
-    public Type getType() {
-        return type;
     }
 
     public boolean isReplicatedCommand() {

@@ -18,7 +18,7 @@ public class DatabaseReader {
 
     private final File dbFile;
     private final Map<String, StoredData> dataStoreMap;
-    private Clock clock;
+    private final Clock clock;
 
     public DatabaseReader(File dbFile, Map<String, StoredData> dataStoreMap, Clock clock) {
         this.dbFile = dbFile;
@@ -30,8 +30,7 @@ public class DatabaseReader {
         // open file and read as input stream
         log.info("Reading database file: {}", dbFile);
         log.info("File size: {}", dbFile.length());
-        InputStream dbFileInput = new FileInputStream(dbFile);
-        try {
+        try (InputStream dbFileInput = new FileInputStream(dbFile)) {
             RdbFileParser rdbFileParser = new RdbFileParser(new BufferedInputStream(dbFileInput), clock);
             OpCode dbCode = rdbFileParser.initDB();
             // skip AUX section
@@ -47,9 +46,6 @@ public class DatabaseReader {
             }
             // select DB (0)
             rdbFileParser.selectDB(dataStoreMap);
-        } finally {
-            // close file
-            dbFileInput.close();
         }
     }
 
