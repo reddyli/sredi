@@ -18,194 +18,241 @@ import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespValue;
 import org.sredi.resp.RespValueParser;
 
+/**
+ * Represents the follower's connection to its leader server.
+ * Handles the replication handshake sequence (PING -> REPLCONF -> PSYNC)
+ * and processes commands received from the leader after handshake completes.
+ *
+ * Handshake sequence:
+ * 1. PING - verify connectivity
+ * 2. REPLCONF listening-port - tell leader our port
+ * 3. REPLCONF capa psync2 - advertise capabilities
+ * 4. PSYNC ? -1 - request full resync (first time) or partial resync
+ * 5. Receive FULLRESYNC response + RDB snapshot
+ */
 public class ConnectionToLeader {
+
     private static final Logger log = LoggerFactory.getLogger(ConnectionToLeader.class);
-    // keep a list of socket connections and continue checking for new connections
+    private static final long HANDSHAKE_POLL_INTERVAL_MS = 50L;
+
     private final FollowerService service;
     private final ClientConnection leaderConnection;
-    private final Deque<CommandAndResponseConsumer> commandsToLeader = new ConcurrentLinkedDeque<>();
     private final ExecutorService executor;
-    private final RespValueParser valueParser;
-    private volatile boolean done = false;
+
+    // Queue of commands to send during handshake (processed sequentially)
+    private final Deque<HandshakeStep> pendingHandshakeSteps = new ConcurrentLinkedDeque<>();
+
+    // Bytes received during handshake - used to calculate replication offset
     @Getter
     private long handshakeBytesReceived = 0;
+
+    // RDB snapshot received during FULLRESYNC
     private RespBulkString fullResyncRdb;
+
+    private volatile boolean done = false;
 
     public ConnectionToLeader(FollowerService service) throws IOException {
         this.service = service;
-        executor = Executors.newFixedThreadPool(1); // We need just one thread for sending commands
-                                                    // to the leader
-        valueParser = new RespValueParser();
+        this.executor = Executors.newSingleThreadExecutor();
 
-        leaderConnection = new ClientConnection(service.getLeaderClientSocket(), valueParser);
+        RespValueParser valueParser = new RespValueParser();
+        this.leaderConnection = new ClientConnection(service.getLeaderClientSocket(), valueParser);
         log.info("Connection to leader: {}, isOpened: {}", leaderConnection, !leaderConnection.isClosed());
 
-        // create the thread for sending handshake commands to the leader
+        startHandshakeThread();
+    }
+
+    // Starts background thread that processes handshake commands
+    private void startHandshakeThread() {
         executor.execute(() -> {
             try {
                 runHandshakeLoop();
             } catch (InterruptedException e) {
-                log.error("InterruptedException on send command thread: {}", e.getMessage());
+                log.error("Handshake thread interrupted: {}", e.getMessage());
                 terminate();
             }
         });
     }
 
+    // Initiates the handshake sequence with the leader
     public void startHandshake() {
         log.info("Starting handshake with leader");
-        sendCommand(new PingCommand(), (cmd, response) -> {
-            ReplConfCommand conf1 = new ReplConfCommand(ReplConfCommand.Option.LISTENING_PORT,
-                    String.valueOf(service.getPort()));
-            sendCommand(conf1, (conf1Cmd, response2) -> {
-                ReplConfCommand conf2 = new ReplConfCommand(ReplConfCommand.Option.CAPA, "psync2");
-                sendCommand(conf2, (conf2Cmd, response3) -> {
-                    PsyncCommand psync = new PsyncCommand("?", -1L);
-                    sendCommand(psync, (psyncCmd, response4) -> {
-                        if (response4.isSimpleString() && response4.getValueAsString().toUpperCase()
-                                .startsWith("FULLRESYNC")) {
-                            log.debug("Full resync - looking for rdb response");
-                            return true;
-                        }
-                        if (!response4.isBulkString()) {
-                            throw new RuntimeException(
-                                    String.format("Unexpected response: %s", response4));
-                        }
-                        setFullResyncRdb((RespBulkString) response4);
-                        log.info("Handshake completed");
-                        handshakeBytesReceived = leaderConnection.getNumBytesReceived();
-
-                        // after the handshake, allow the ConnectionManager to poll for commands
-                        // from the leader and process them in the FollowerService on the main event
-                        // loop
-                        service.getConnectionManager().addPriorityConnection(leaderConnection);
-                        return false;
-                    });
-                    return false;
-                });
-                return false;
-            });
-            return false;
-        });
+        queueHandshakeStep(new PingCommand(), this::onPingResponse);
     }
 
-    private void setFullResyncRdb(RespBulkString fullResyncRdb) {
-        this.fullResyncRdb = fullResyncRdb;
+    // Step 1: After PING response, send REPLCONF listening-port
+    private boolean onPingResponse(Command cmd, RespValue response) {
+        ReplConfCommand portConf = new ReplConfCommand(
+                ReplConfCommand.Option.LISTENING_PORT,
+                String.valueOf(service.getPort()));
+        queueHandshakeStep(portConf, this::onListeningPortResponse);
+        return false;
     }
 
+    // Step 2: After REPLCONF listening-port, send REPLCONF capa psync2
+    private boolean onListeningPortResponse(Command cmd, RespValue response) {
+        ReplConfCommand capaConf = new ReplConfCommand(ReplConfCommand.Option.CAPA, "psync2");
+        queueHandshakeStep(capaConf, this::onCapaResponse);
+        return false;
+    }
+
+    // Step 3: After REPLCONF capa, send PSYNC ? -1
+    private boolean onCapaResponse(Command cmd, RespValue response) {
+        PsyncCommand psync = new PsyncCommand("?", -1L);
+        queueHandshakeStep(psync, this::onPsyncResponse);
+        return false;
+    }
+
+    // Step 4: Handle PSYNC response - expect FULLRESYNC followed by RDB
+    private boolean onPsyncResponse(Command cmd, RespValue response) {
+        if (response.isSimpleString() && response.getValueAsString().toUpperCase().startsWith("FULLRESYNC")) {
+            log.debug("Full resync - expecting RDB snapshot next");
+            return true; // Signal that we expect RDB data next
+        }
+
+        if (!response.isBulkString()) {
+            throw new RuntimeException("Unexpected PSYNC response: " + response);
+        }
+
+        completeHandshake((RespBulkString) response);
+        return false;
+    }
+
+    // Called when RDB snapshot is received, completing the handshake
+    private void completeHandshake(RespBulkString rdbData) {
+        this.fullResyncRdb = rdbData;
+        this.handshakeBytesReceived = leaderConnection.getNumBytesReceived();
+        log.info("Handshake completed, received {} bytes during handshake", handshakeBytesReceived);
+
+        // Register with ConnectionManager to receive replicated commands
+        service.getConnectionManager().addPriorityConnection(leaderConnection);
+    }
+
+    // Adds a command to the handshake queue
+    private void queueHandshakeStep(Command command, BiFunction<Command, RespValue, Boolean> responseHandler) {
+        pendingHandshakeSteps.offerLast(new HandshakeStep(command, responseHandler));
+    }
+
+    // Returns the RDB snapshot received during full resync
     public byte[] getFullResyncRdb() {
-        return fullResyncRdb.getValue();
+        return fullResyncRdb != null ? fullResyncRdb.getValue() : null;
     }
 
-    private void sendCommand(Command command,
-                             BiFunction<Command, RespValue, Boolean> responseConsumer) {
-        CommandAndResponseConsumer cmd = new CommandAndResponseConsumer(command, responseConsumer);
-        // add the command to the queue
-        commandsToLeader.offerLast(cmd);
-    }
-
+    // Closes connection to leader and shuts down executor
     public void terminate() {
-        log.info("Terminate follower invoked. Closing socket to leader {}.", service.getLeaderClientSocket());
+        log.info("Terminating connection to leader: {}", service.getLeaderClientSocket());
         done = true;
-        // close the connection to the leader
         try {
             service.getLeaderClientSocket().close();
         } catch (IOException e) {
-            log.error("IOException on socket close: {}", e.getMessage());
+            log.error("Error closing socket to leader: {}", e.getMessage());
         }
-        // executor close - waits for thread to finish
         executor.close();
     }
 
+    // Main loop that processes handshake commands sequentially
     public void runHandshakeLoop() throws InterruptedException {
         while (!done) {
             if (leaderConnection.isClosed()) {
-                log.warn("Terminating repository due to connection is closed by leader during handshake: {}", leaderConnection);
+                log.warn("Leader closed connection during handshake");
                 terminate();
                 continue;
             }
 
-            // check for handshake commands waiting to be sent
-            try {
-                while (!commandsToLeader.isEmpty()) {
-                    CommandAndResponseConsumer cmd = commandsToLeader.pollFirst();
-                    // send the command to the leader
-                    log.debug("Sending leader command: {}", cmd.command);
-                    leaderConnection.writeFlush(cmd.command.asCommand());
-
-                    // read the response - will wait on the stream until the whole value is parsed
-                    RespValue response = leaderConnection.readValue();
-                    log.debug("Received leader response: {}", response);
-
-                    // responseConsumer returns True if we expect the RDB value from the command
-                    if (cmd.responseConsumer.apply(cmd.command, response)) {
-                        try {
-                            byte[] rdb = leaderConnection.readRDB();
-
-                            response = new RespBulkString(rdb);
-                            log.debug("Received leader RDB: {}", response);
-                            cmd.responseConsumer.apply(cmd.command, response);
-                        } catch (IOException e) {
-                            log.error("ConnectionToLeader: IOException on readRDB: {} {}", e.getClass().getSimpleName(), e.getMessage());
-                        }
-                    }
-                }
-                // sleep a bit before the next handshake command
-                Thread.sleep(50L);
-            } catch (Exception e) {
-                log.error("ConnectionToLeader Loop Exception: {} \"{}\"", e.getClass().getSimpleName(), e.getMessage());
-            }
+            processNextHandshakeStep();
+            Thread.sleep(HANDSHAKE_POLL_INTERVAL_MS);
         }
-        log.debug("Exiting thread for handshake commands - done: {}", done);
+        log.debug("Handshake loop exited");
     }
 
+    // Processes all pending handshake steps
+    private void processNextHandshakeStep() {
+        try {
+            while (!pendingHandshakeSteps.isEmpty()) {
+                HandshakeStep step = pendingHandshakeSteps.pollFirst();
+                executeHandshakeStep(step);
+            }
+        } catch (Exception e) {
+            log.error("Error in handshake loop: {} \"{}\"", e.getClass().getSimpleName(), e.getMessage());
+        }
+    }
+
+    // Sends command to leader and processes response
+    private void executeHandshakeStep(HandshakeStep step) throws IOException {
+        log.debug("Sending handshake command: {}", step.command);
+        leaderConnection.writeFlush(step.command.asCommand());
+
+        RespValue response = leaderConnection.readValue();
+        log.debug("Received response: {}", response);
+
+        // If handler returns true, we expect RDB data next
+        if (step.responseHandler.apply(step.command, response)) {
+            readAndProcessRdb(step);
+        }
+    }
+
+    // Reads RDB snapshot after FULLRESYNC response
+    private void readAndProcessRdb(HandshakeStep step) {
+        try {
+            byte[] rdb = leaderConnection.readRDB();
+            RespBulkString rdbValue = new RespBulkString(rdb);
+            log.debug("Received RDB snapshot: {} bytes", rdb.length);
+            step.responseHandler.apply(step.command, rdbValue);
+        } catch (IOException e) {
+            log.error("Failed to read RDB: {} {}", e.getClass().getSimpleName(), e.getMessage());
+        }
+    }
+
+    // Checks if the given connection is the leader connection
     public boolean isLeaderConnection(ClientConnection conn) {
         return leaderConnection.equals(conn);
     }
 
-    public void executeCommandFromLeader(ClientConnection conn, Command command)
-            throws IOException {
+    // Executes a command received from the leader (after handshake)
+    public void executeCommandFromLeader(ClientConnection conn, Command command) throws IOException {
         if (!isLeaderConnection(conn)) {
-            log.error("ConnectionToLeader ERROR: executeCommandFromLeader called with non-leader connection: {}", conn);
+            log.error("executeCommandFromLeader called with non-leader connection: {}", conn);
             return;
         }
 
-        if (command.isReplicatedCommand()) {
-            log.debug("Received replicated command from leader: {}", conn);
-        } else {
-            log.debug("Received request from leader: {}", conn);
-        }
-
-        // if the command came from the leader, then for most commands the leader does not
-        // expect a response
-        boolean writeResponse = shouldSendResponseToConnection(command, conn);
+        logReceivedCommand(command);
 
         byte[] response = command.execute(service);
-        if (writeResponse) {
-            log.debug("Follower service sending {} response: {}", command.getType().name(), Command.responseLogString(response));
-            if (response != null && response.length > 0) {
-                conn.writeFlush(response);
-            }
+
+        if (shouldSendResponseToLeader(command)) {
+            sendResponseToLeader(conn, command, response);
         } else {
-            log.trace("Follower service do not send {} response: {}", command.getType().name(), Command.responseLogString(response));
+            log.trace("Not sending response for {}: {}", command.getType().name(), Command.responseLogString(response));
         }
     }
 
-    public boolean shouldSendResponseToConnection(Command command, ClientConnection conn) {
-        if (!leaderConnection.equals(conn)) {
-            return true;
-        }
-        return command instanceof ReplConfCommand && ((ReplConfCommand) command)
-                .getOptionsMap().containsKey(ReplConfCommand.GETACK_NAME);
-    }
-
-    private static class CommandAndResponseConsumer {
-        private final Command command;
-        private final BiFunction<Command, RespValue, Boolean> responseConsumer;
-
-        public CommandAndResponseConsumer(Command command,
-                                          BiFunction<Command, RespValue, Boolean> responseConsumer) {
-            this.command = command;
-            this.responseConsumer = responseConsumer;
+    private void logReceivedCommand(Command command) {
+        if (command.isReplicatedCommand()) {
+            log.debug("Received replicated command from leader");
+        } else {
+            log.debug("Received request from leader");
         }
     }
+
+    private void sendResponseToLeader(ClientConnection conn, Command command, byte[] response) throws IOException {
+        log.debug("Sending {} response: {}", command.getType().name(), Command.responseLogString(response));
+        if (response != null && response.length > 0) {
+            conn.writeFlush(response);
+        }
+    }
+
+    // Determines if we should respond to the leader for this command
+    // Only REPLCONF GETACK requires a response; replicated writes don't
+    public boolean shouldSendResponseToLeader(Command command) {
+        if (command instanceof ReplConfCommand replConf) {
+            return replConf.getOptionsMap().containsKey(ReplConfCommand.GETACK_NAME);
+        }
+        return false;
+    }
+
+    // Pairs a handshake command with its response handler
+    private record HandshakeStep(
+            Command command,
+            BiFunction<Command, RespValue, Boolean> responseHandler
+    ) {}
 }

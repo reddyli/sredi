@@ -14,120 +14,143 @@ import org.slf4j.LoggerFactory;
 import org.sredi.commands.Command;
 import org.sredi.resp.RespValue;
 
+/**
+ * Alternative implementation for handling WAIT command (currently unused - see ReplConfAckManager).
+ *
+ * Sends REPLCONF GETACK to all followers in parallel using an ExecutorService,
+ * then waits for responses using a CountDownLatch. Includes extended timeout
+ * logic for compatibility with certain test scenarios.
+ *
+ * Note: The current implementation uses ReplConfAckManager instead, which uses
+ * a different approach based on object locks and notification.
+ */
 public class WaitExecutor {
-    private static final Logger log = LoggerFactory.getLogger(WaitExecutor.class);
-    private final int requestWaitFor;
-    private final int numToWaitFor;
-    private final AtomicInteger numAcknowledged;
 
+    private static final Logger log = LoggerFactory.getLogger(WaitExecutor.class);
+
+    // Extra time beyond requested timeout to wait for stragglers
+    private static final long EXTENDED_TIMEOUT_MS = 100L;
+
+    // Polling interval while waiting for additional ACKs
+    private static final long POLL_INTERVAL_MS = 100L;
+
+    private final int requestedAckCount;
+    private final int numToWaitFor;
+    private final AtomicInteger acknowledgedCount;
     private final CountDownLatch latch;
     private final ExecutorService executorService;
 
-    public WaitExecutor(int requestWaitFor, int numFollowers, ExecutorService executorService) {
-        this.requestWaitFor = requestWaitFor;
-        this.numToWaitFor = Math.min(requestWaitFor, numFollowers);
+    public WaitExecutor(int requestedAckCount, int numFollowers, ExecutorService executorService) {
+        this.requestedAckCount = requestedAckCount;
+        this.numToWaitFor = Math.min(requestedAckCount, numFollowers);
         this.executorService = executorService;
-        this.numAcknowledged = new AtomicInteger(0);
-        this.latch = new CountDownLatch(requestWaitFor);
+        this.acknowledgedCount = new AtomicInteger(0);
+        this.latch = new CountDownLatch(requestedAckCount);
     }
 
+    // Sends GETACK to all followers and waits for responses
     public int wait(Collection<ConnectionToFollower> followers, long timeoutMillis) {
+        long extendedTimeout = timeoutMillis + EXTENDED_TIMEOUT_MS;
+        List<Future<Void>> ackRequestFutures = submitAckRequests(followers, extendedTimeout);
+
         try {
-            // extend the timeout to allow for codecrafters tests to pass - this may be needed for
-            // "replication-18" which expects all replicas, even if it asks for less than all
-            // of them, so we need to wait longer than the default timeout.
-            long extendedTimeout = timeoutMillis + 100L;
-
-            // send a replConf ack command to each follower on a separate thread
-            // wait on the latch to block until enough acks are received
-            List<Future<Void>> callFutures = new ArrayList<>();
-            for (ConnectionToFollower follower : followers) {
-                callFutures.add(executorService.submit(() -> {
-                    requestAckFromFollower(follower, extendedTimeout);
-                    return null;
-                }));
-            }
-
-            long before = System.currentTimeMillis();
-            log.debug("Time {}: waiting up to {} millis for acks.", before, extendedTimeout);
-            asyncSendRequest(() -> {
-                try {
-                    long waitUntil;
-                    if (!latch.await(timeoutMillis, TimeUnit.MILLISECONDS)) {
-                        log.debug("Timed out waiting for {} replConfAcks. Received {} acks.", numToWaitFor, numAcknowledged.get());
-                        log.trace("numAcknowledged identity: {}", Integer.toHexString(System.identityHashCode(numAcknowledged)));
-                        // sleep for the extended timeout
-                        log.debug("Time {}: sleeping extend for up to {} millis for acks.", System.currentTimeMillis(), extendedTimeout - timeoutMillis);
-                        // give extended time for codecrafters tests to pass
-                        waitUntil = before + extendedTimeout;
-                    } else {
-                        // latch returned true, so we have received requested number, but still
-                        // let's wait the full timeout duration for codecrafters tests to pass
-                        waitUntil = before + timeoutMillis;
-                    }
-                    // although we timed out or have enough acks to return now, we will sleep
-                    // a little longer until we get ack from all followers
-                    // - this is for codecrafters test "replication-17" to pass since it
-                    // expects us to return the count of all follower replicas
-                    for (; (numAcknowledged.get() < followers.size()
-                            && System.currentTimeMillis() < waitUntil);) {
-                        log.debug("Time {}: waiting until {} and have received {} replConfAcks.", System.currentTimeMillis(), waitUntil, numAcknowledged.get());
-                        Thread.sleep(100L);
-                    }
-                } catch (InterruptedException e) {
-                    log.debug("Interrupted while waiting for {} replConfAcks. Received {} acks.", requestWaitFor, numAcknowledged.get());
-                }
-            }).get();
-            long after = System.currentTimeMillis();
-            log.debug("Time {}: after extended task wait, elapsed time: {}.", after, after - before);
-
-            // cancel all pending tasks
-            int countCancelled = 0;
-            for (Future<Void> future : callFutures) {
-                if (future.cancel(true)) {
-                    countCancelled++;
-                }
-            }
-            log.debug("Cancelled {} of {} tasks.", countCancelled, callFutures.size());
+            waitForAcksWithExtendedTimeout(followers.size(), timeoutMillis, extendedTimeout);
         } catch (Exception e) {
-            log.error("Error while sending {} replConfAcks. Received {} acks.", numToWaitFor, numAcknowledged.get());
+            log.error("Error waiting for ACKs: received {} of {} requested", acknowledgedCount.get(), numToWaitFor);
+        } finally {
+            cancelPendingRequests(ackRequestFutures);
         }
-        log.trace("numAcknowledged identity: {}", Integer.toHexString(System.identityHashCode(numAcknowledged)));
-        log.debug("Returning {} of {} requested acks.", numAcknowledged.get(), requestWaitFor);
-        return numAcknowledged.get();
+
+        log.debug("Returning {} of {} requested acks", acknowledgedCount.get(), requestedAckCount);
+        return acknowledgedCount.get();
     }
 
-    private void requestAckFromFollower(ConnectionToFollower connection, long extendedTimeout) {
-        try {
-            log.debug("Sending replConfAck to {}", connection.toString());
-            log.debug("Time {}: before send on {}", System.currentTimeMillis(), connection);
-            // if no response received within timeout, then it returns null
-            RespValue ackResponse = connection.sendAndWaitForReplConfAck(extendedTimeout);
-            if (ackResponse == null) {
-                log.debug("Time {}: after send on {}, Timed out waiting, no response. Still waiting for {} replConfAcks.",
-                        System.currentTimeMillis(), connection, numToWaitFor - numAcknowledged.get());
-            } else {
-                log.debug("Time {}: after send on {}, response: {}",
-                        System.currentTimeMillis(), connection, Command.responseLogString(ackResponse.asResponse()));
-                log.trace("numAcknowledged identity: {}", Integer.toHexString(System.identityHashCode(numAcknowledged)));
-                int prevAck = numAcknowledged.getAndIncrement();
-                latch.countDown();
-                log.debug("Received replConfAck {} (prev {}) from {}", numAcknowledged.get(), prevAck, connection.toString());
+    // Submits ACK requests to all followers in parallel
+    private List<Future<Void>> submitAckRequests(Collection<ConnectionToFollower> followers, long timeout) {
+        List<Future<Void>> futures = new ArrayList<>();
+        for (ConnectionToFollower follower : followers) {
+            futures.add(executorService.submit(() -> {
+                requestAckFromFollower(follower, timeout);
+                return null;
+            }));
+        }
+        return futures;
+    }
+
+    // Waits for ACKs with extended timeout for test compatibility
+    private void waitForAcksWithExtendedTimeout(int followerCount, long timeoutMillis, long extendedTimeout)
+            throws Exception {
+        long startTime = System.currentTimeMillis();
+        log.debug("Waiting up to {} ms for {} ACKs", extendedTimeout, numToWaitFor);
+
+        // Submit the waiting logic as an async task and block on it
+        executorService.submit(() -> {
+            try {
+                long deadline = calculateDeadline(startTime, timeoutMillis, extendedTimeout);
+                waitUntilDeadlineOrAllAcked(followerCount, deadline);
+            } catch (InterruptedException e) {
+                log.debug("Interrupted while waiting for ACKs, received {}", acknowledgedCount.get());
             }
-        } catch (Exception e) {
-            log.error("Error sending replConfAck to {}, error: {} {}, cause: {}",
-                    connection.toString(), e.getClass().getSimpleName(), e.getMessage(), e.getCause());
-            log.debug("Not counted. Still waiting for {} replConfAcks.", numToWaitFor - numAcknowledged.get());
+        }).get();
+
+        log.debug("Wait completed in {} ms", System.currentTimeMillis() - startTime);
+    }
+
+    // Calculates deadline based on whether initial timeout was met
+    private long calculateDeadline(long startTime, long timeoutMillis, long extendedTimeout)
+            throws InterruptedException {
+        if (!latch.await(timeoutMillis, TimeUnit.MILLISECONDS)) {
+            log.debug("Initial timeout expired with {} ACKs, extending wait", acknowledgedCount.get());
+            return startTime + extendedTimeout;
+        }
+        // Got enough ACKs, but wait full timeout for additional ones (test compatibility)
+        return startTime + timeoutMillis;
+    }
+
+    // Polls until deadline or all followers have acknowledged
+    private void waitUntilDeadlineOrAllAcked(int followerCount, long deadline) throws InterruptedException {
+        while (acknowledgedCount.get() < followerCount && System.currentTimeMillis() < deadline) {
+            log.debug("Have {} ACKs, waiting until {}", acknowledgedCount.get(), deadline);
+            Thread.sleep(POLL_INTERVAL_MS);
         }
     }
 
-    private Future<?> asyncSendRequest(Runnable runnable) {
-        return executorService.submit(runnable);
+    // Sends GETACK to a single follower and records response
+    private void requestAckFromFollower(ConnectionToFollower follower, long timeout) {
+        try {
+            log.debug("Requesting ACK from {}", follower);
+            RespValue response = follower.sendAndWaitForReplConfAck(timeout);
+
+            if (response == null) {
+                log.debug("No response from {}, still waiting for {} ACKs",
+                        follower, numToWaitFor - acknowledgedCount.get());
+                return;
+            }
+
+            int newCount = acknowledgedCount.incrementAndGet();
+            latch.countDown();
+            log.debug("Received ACK #{} from {}: {}",
+                    newCount, follower, Command.responseLogString(response.asResponse()));
+
+        } catch (Exception e) {
+            log.error("Error requesting ACK from {}: {} {}",
+                    follower, e.getClass().getSimpleName(), e.getMessage());
+        }
+    }
+
+    // Cancels any pending ACK request tasks
+    private void cancelPendingRequests(List<Future<Void>> futures) {
+        int cancelled = 0;
+        for (Future<Void> future : futures) {
+            if (future.cancel(true)) {
+                cancelled++;
+            }
+        }
+        log.debug("Cancelled {} of {} pending tasks", cancelled, futures.size());
     }
 
     @Override
     public String toString() {
-        return "WaitExecutor [numToWaitFor=" + numToWaitFor + ", numAcknowledged="
-                + numAcknowledged.get() + "]";
+        return "WaitExecutor[waiting=" + numToWaitFor + ", acked=" + acknowledgedCount.get() + "]";
     }
 }

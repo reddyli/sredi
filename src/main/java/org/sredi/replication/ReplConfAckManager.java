@@ -7,95 +7,132 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import lombok.Setter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sredi.commands.Command;
 import org.sredi.commands.ReplConfCommand;
 
+/**
+ * Singleton that coordinates REPLCONF ACK requests and responses for the WAIT command.
+ * <p>
+ * When a client issues WAIT numreplicas timeout:
+ * 1. Leader sends REPLCONF GETACK * to all followers
+ * 2. Followers respond with REPLCONF ACK <offset>
+ * 3. This manager tracks which followers have acknowledged
+ * 4. Returns count of acknowledging followers when enough respond or timeout expires
+ * <p>
+ * Uses object locks to allow multiple concurrent WAIT commands, each tracking its own set of followers.
+ */
 public final class ReplConfAckManager {
-    private static final Logger log = LoggerFactory.getLogger(ReplConfAckManager.class);
-    private Map<Object, Set<ClientConnection>> waitFollowerSets = new ConcurrentHashMap<>();
-    private Map<Object, Set<ClientConnection>> ackFollowerSets = new ConcurrentHashMap<>();
-    private boolean testingDontWaitForAck = true;
 
-    public static ReplConfAckManager INSTANCE = new ReplConfAckManager();
+    private static final Logger log = LoggerFactory.getLogger(ReplConfAckManager.class);
+
+    public static final ReplConfAckManager INSTANCE = new ReplConfAckManager();
+
+    // Maps lock object -> set of followers we're waiting for ACKs from
+    private final Map<Object, Set<ClientConnection>> pendingAckSets = new ConcurrentHashMap<>();
+
+    // Maps lock object -> set of followers that have sent ACKs
+    private final Map<Object, Set<ClientConnection>> receivedAckSets = new ConcurrentHashMap<>();
+
+    // When true, returns immediately without waiting (for testing)
+    @Setter
+    private boolean testingDontWaitForAck = true;
 
     private ReplConfAckManager() {
     }
 
-    public void setTestingDontWaitForAck(boolean testingDontWaitForAck) {
-        this.testingDontWaitForAck = testingDontWaitForAck;
-    }
-
-    // get notified that a connection has received a replconf ack
+    // Called when a follower sends REPLCONF ACK - notifies any waiting WAIT commands
     public void notifyGotAckFromFollower(ClientConnection connection) {
-        waitFollowerSets.forEach((lock, connectionSet) -> {
-            if (connectionSet.contains(connection)) {
+        pendingAckSets.forEach((lock, waitingFor) -> {
+            if (waitingFor.contains(connection)) {
                 synchronized (lock) {
-                    ackFollowerSets.get(lock).add(connection);
+                    receivedAckSets.get(lock).add(connection);
                     lock.notifyAll();
                 }
             }
         });
     }
 
-    // wait for a set of connections to receive a replconf ack
-    public int waitForAcksFromFollowerSet(int requestWaitFor, Set<ClientConnection> followerSet,
-            Clock clock,
-            long timeoutMillis) {
-        int result = 0;
-        // create lock for waiting on acks from this set of connections
-        Object lock = new Object();
-        waitFollowerSets.put(lock, followerSet);
-        Set<ClientConnection> ackSet = new HashSet<>();
-        ackFollowerSets.put(lock, ackSet);
-        synchronized (lock) {
-            // send the requests inside the synchronized lock, but before we start the timer
-            followerSet.forEach(this::sendCommand);
+    // Sends REPLCONF GETACK to followers and waits for responses
+    public int waitForAcksFromFollowerSet(int requestedCount, Set<ClientConnection> followers,
+            Clock clock, long timeoutMillis) {
 
-            long start = clock.millis();
-            long now = start;
-            // wait for either the requested number of acks or all current followers, whichever is
-            // less
-            int numToWaitFor = Math.min(requestWaitFor, followerSet.size());
-            if (testingDontWaitForAck) {
-                return followerSet.size();
-            }
-            try {
-                while ((start + timeoutMillis - now > 0)
-                        && ackSet.size() < numToWaitFor) {
-                    // suspend this synchronized section and wait until the lock is notified that an
-                    // ack has been received
-                    lock.wait(start + timeoutMillis - now);
-                    log.debug("ReplConfAckManager: lock notified {} acks of {} requested", ackSet.size(), numToWaitFor);
-                    now = clock.millis();
-                    result = ackSet.size();
+        Object lock = new Object();
+        Set<ClientConnection> receivedAcks = new HashSet<>();
+
+        registerWaitSession(lock, followers, receivedAcks);
+
+        try {
+            synchronized (lock) {
+                sendGetAckToAll(followers);
+
+                if (testingDontWaitForAck) {
+                    return followers.size();
                 }
-            } catch (Exception e) {
-                log.error("ReplConfAckManager: exception while waiting for acks: {} {}", followerSet, this, e);
-            } finally {
-                waitFollowerSets.remove(lock);
-                ackFollowerSets.remove(lock);
+
+                return waitForAcks(lock, receivedAcks, requestedCount, followers.size(), clock, timeoutMillis);
             }
+        } finally {
+            unregisterWaitSession(lock);
         }
-        return result;
     }
 
-    private void sendCommand(ClientConnection connection) {
-        ReplConfCommand ack = new ReplConfCommand(ReplConfCommand.Option.GETACK, "*");
-        String ackString = new String(ack.asCommand()).toUpperCase();
-        log.debug("ReplConfAckManager: Sending command '{}' to client '{}'", Command.responseLogString(ackString.getBytes()), connection);
+    // Registers this WAIT session so incoming ACKs can be routed to it
+    private void registerWaitSession(Object lock, Set<ClientConnection> followers, Set<ClientConnection> receivedAcks) {
+        pendingAckSets.put(lock, followers);
+        receivedAckSets.put(lock, receivedAcks);
+    }
+
+    // Removes this WAIT session after completion
+    private void unregisterWaitSession(Object lock) {
+        pendingAckSets.remove(lock);
+        receivedAckSets.remove(lock);
+    }
+
+    // Sends REPLCONF GETACK * to all followers
+    private void sendGetAckToAll(Set<ClientConnection> followers) {
+        followers.forEach(this::sendGetAckCommand);
+    }
+
+    // Blocks until enough ACKs received or timeout expires
+    private int waitForAcks(Object lock, Set<ClientConnection> receivedAcks, int requestedCount,
+            int followerCount, Clock clock, long timeoutMillis) {
+        int numToWaitFor = Math.min(requestedCount, followerCount);
+        long deadline = clock.millis() + timeoutMillis;
+
         try {
-            connection.writeFlush(ackString.getBytes());
+            while (clock.millis() < deadline && receivedAcks.size() < numToWaitFor) {
+                long remainingMs = deadline - clock.millis();
+                if (remainingMs > 0) {
+                    lock.wait(remainingMs);
+                }
+                log.debug("Received {} of {} requested ACKs", receivedAcks.size(), numToWaitFor);
+            }
+        } catch (InterruptedException e) {
+            log.error("Interrupted while waiting for ACKs", e);
+            Thread.currentThread().interrupt();
+        }
+
+        return receivedAcks.size();
+    }
+
+    // Sends REPLCONF GETACK * to a single follower
+    private void sendGetAckCommand(ClientConnection connection) {
+        ReplConfCommand getAck = new ReplConfCommand(ReplConfCommand.Option.GETACK, "*");
+        String commandStr = new String(getAck.asCommand()).toUpperCase();
+        log.debug("Sending GETACK to {}: '{}'", connection, Command.responseLogString(commandStr.getBytes()));
+
+        try {
+            connection.writeFlush(commandStr.getBytes());
         } catch (IOException e) {
-            log.error("ReplConfAckManager: exception while send replconf command to connection: {} {}", connection, this, e);
+            log.error("Failed to send GETACK to {}: {}", connection, e.getMessage());
         }
     }
 
     @Override
     public String toString() {
-        return "ReplConfAckManager [waitFollowerSets=" + waitFollowerSets + ", ackFollowerSets="
-                + ackFollowerSets + "]";
+        return "ReplConfAckManager[pending=" + pendingAckSets.size() + ", received=" + receivedAckSets.size() + "]";
     }
-
 }
