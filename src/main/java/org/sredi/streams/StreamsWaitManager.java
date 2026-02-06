@@ -11,18 +11,21 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+// Singleton that coordinates blocking XREAD operations across streams
 public final class StreamsWaitManager {
     private static final Logger log = LoggerFactory.getLogger(StreamsWaitManager.class);
-    private Map<Object, Set<String>> waitStreamSets = new ConcurrentHashMap<>();
 
-    public static StreamsWaitManager INSTANCE = new StreamsWaitManager();
+    public static final StreamsWaitManager INSTANCE = new StreamsWaitManager();
 
-    private StreamsWaitManager() {
-    }
+    // Maps each waiting lock to the set of stream keys it's waiting on
+    private final Map<Object, Set<String>> waitingLocks = new ConcurrentHashMap<>();
 
+    private StreamsWaitManager() {}
+
+    // Called when data is added to a stream - wakes up any waiters on that stream
     public void addNotify(String streamKey) {
-        waitStreamSets.forEach((lock, streamSet) -> {
-            if (streamSet.contains(streamKey)) {
+        waitingLocks.forEach((lock, streamKeys) -> {
+            if (streamKeys.contains(streamKey)) {
                 synchronized (lock) {
                     lock.notifyAll();
                 }
@@ -30,61 +33,54 @@ public final class StreamsWaitManager {
         });
     }
 
+    // Reads from streams, blocking until data arrives or timeout expires
     public Map<String, List<StreamValue>> readWithWait(
-            Map<String, StreamData> streams, Map<String, StreamId> startIds, int count,
-            Clock clock, long timeoutMillis) {
+            Map<String, StreamData> streams, Map<String, StreamId> startIds,
+            int count, Clock clock, long timeoutMillis) {
+
         Map<String, List<StreamValue>> result = new HashMap<>();
-        int countPerStream = count;
-        // if count not specified, then we try to read max number of values from each stream,
-        // but we only need 1 value to end waiting
-        if (count == 0) {
-            count = 1;
-            countPerStream = StreamData.MAX_READ_COUNT;
-        }
+        int countPerStream = (count == 0) ? StreamData.MAX_READ_COUNT : count;
+        int minRequired = (count == 0) ? 1 : count;
 
-        // create lock for waiting on the set of streams
         Object lock = new Object();
-        waitStreamSets.put(lock, streams.keySet());
+        waitingLocks.put(lock, streams.keySet());
+
         synchronized (lock) {
-
-            long start = clock.millis();
-            long now = start;
             try {
-                int readCount = 0;
-                while ((timeoutMillis == 0 || now - start < timeoutMillis)
-                 && readCount < count) {
+                long deadline = clock.millis() + timeoutMillis;
+                int totalRead = 0;
 
-                    // read from each stream and wait if not enough data
-                    for (String streamKey : streams.keySet()) {
-                        StreamId startId = startIds.get(streamKey);
-                        List<StreamValue> nextValues = streams.get(streamKey).readNextValues(
-                                countPerStream, startId);
-                        List<StreamValue> values = result.computeIfAbsent(streamKey,
-                                k -> new ArrayList<>());
-                        values.addAll(nextValues);
-                        readCount += nextValues.size();
-                    }
-                    if (readCount >= count) {
+                while (totalRead < minRequired && (timeoutMillis == 0 || clock.millis() < deadline)) {
+                    totalRead = readFromAllStreams(streams, startIds, countPerStream, result);
+
+                    if (totalRead >= minRequired) {
                         return result;
                     }
-                    countPerStream = count - readCount;
-                    // wait until notified that one of the streams has more data
+
+                    countPerStream = minRequired - totalRead;
                     lock.wait(timeoutMillis);
-                    now = clock.millis();
                 }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.debug("readWithWait interrupted");
             } catch (Exception e) {
-                log.error("readWithWait: exception while reading from streams: {} {}", streams.keySet(), this, e);
+                log.error("readWithWait error: {}", e.getMessage(), e);
             } finally {
-                // clean up the lock now that we are done waiting
-                waitStreamSets.remove(lock);
+                waitingLocks.remove(lock);
             }
         }
         return result;
     }
 
-    @Override
-    public String toString() {
-        return "StreamsWaitManager [waitStreamSets=" + waitStreamSets + "]";
+    private int readFromAllStreams(Map<String, StreamData> streams, Map<String, StreamId> startIds,
+            int countPerStream, Map<String, List<StreamValue>> result) {
+        int totalRead = 0;
+        for (var entry : streams.entrySet()) {
+            String key = entry.getKey();
+            List<StreamValue> values = entry.getValue().readNextValues(countPerStream, startIds.get(key));
+            result.computeIfAbsent(key, k -> new ArrayList<>()).addAll(values);
+            totalRead += values.size();
+        }
+        return totalRead;
     }
-
 }

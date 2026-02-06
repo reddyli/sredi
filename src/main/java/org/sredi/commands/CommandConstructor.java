@@ -25,10 +25,12 @@ public class CommandConstructor {
                 : array.getContext().getStartBytesOffset();
         String commandName = getCommandName(array.getValues()[0]);
         Command.Type commandType = Command.Type.of(commandName);
+        log.debug("Command {} has been created", commandName);
         Command command = switch (commandType) {
         case CONFIG -> new ConfigCommand();
         case ECHO -> new EchoCommand();
         case GET -> new GetCommand();
+        case DEL -> new DelCommand();
         case INCR -> new IncrCommand();
         case INFO -> new InfoCommand();
         case KEYS -> new KeysCommand();

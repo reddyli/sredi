@@ -2,28 +2,38 @@ package org.sredi.streams;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Function;
+import java.util.function.IntPredicate;
 
+// ArrayList with binary search for sorted elements (callers must add in order)
 public class OrderedArrayList<T extends Comparable<T>> extends ArrayList<T> {
 
-    // get the index of the next item - this is the left most item which is greater than val
-    // returns 0 if val is smaller than all items and returns size() if val is
-    // greater than all items
-    int findNext(T val) {
-        if (size() == 0 || val.compareTo(get(0)) < 0) {
+    // Returns index of first element > val, or size() if none
+    public int findNext(T val) {
+        if (isEmpty() || val.compareTo(get(0)) < 0) {
             return 0;
         }
         if (val.compareTo(last()) >= 0) {
             return size();
         }
-        return find(0, size(), i -> get(i).compareTo(val) > 0);
+        return binarySearchLeftmost(0, size(), i -> get(i).compareTo(val) > 0);
     }
 
-    // get the left most index of the value that matches the condition
-    static int find(int left, int right, Function<Integer, Boolean> matchCondition) {
+    public T last() {
+        return isEmpty() ? null : get(size() - 1);
+    }
+
+    // Returns sublist of elements in [startId, endId] inclusive
+    public List<T> range(T startId, T endId) {
+        int start = binarySearchLeftmost(0, size(), i -> get(i).compareTo(startId) >= 0);
+        int end = findNext(endId);
+        return subList(start, end);
+    }
+
+    // Binary search for leftmost index where condition is true
+    private int binarySearchLeftmost(int left, int right, IntPredicate condition) {
         while (left < right) {
             int mid = left + (right - left) / 2;
-            if (matchCondition.apply(mid)) {
+            if (condition.test(mid)) {
                 right = mid;
             } else {
                 left = mid + 1;
@@ -31,15 +41,4 @@ public class OrderedArrayList<T extends Comparable<T>> extends ArrayList<T> {
         }
         return left;
     }
-
-    T last() {
-        return size() > 0 ? get(size() - 1) : null;
-    }
-
-    public List<T> range(T startId, T endId) {
-        int i = find(0, size(), m -> get(m).compareTo(startId) >= 0);
-        int j = findNext(endId);
-        return subList(i, j);
-    }
-
 }

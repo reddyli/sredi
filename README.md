@@ -1,4 +1,4 @@
-# SREDI
+r# SREDI
 
 A High Performance, distributed in-memory storage system written in Java.
 
@@ -6,7 +6,7 @@ A High Performance, distributed in-memory storage system written in Java.
 
 | Category | Supported |
 |----------|-----------|
-| Commands | GET, SET, INCR, TYPE, KEYS |
+| Commands | GET, SET, DEL, INCR, TYPE, KEYS |
 | Streams | XADD, XRANGE, XREAD |
 | Replication | PSYNC, REPLCONF, WAIT |
 | Transactions | MULTI, EXEC, DISCARD |
@@ -41,7 +41,6 @@ docker run -p 6379:6379 -v /path/to/data:/data reddyli/sredi --dir /data --dbfil
 
 ## TODO
 
-- [ ] DEL command
 - [ ] EXISTS command
 - [ ] Lists (LPUSH, RPUSH, LPOP, RPOP, LRANGE, LLEN)
 - [ ] RDB Writing (SAVE/BGSAVE)
@@ -53,3 +52,4 @@ docker run -p 6379:6379 -v /path/to/data:/data reddyli/sredi --dir /data --dbfil
 - [ ] Leader Election
 - [ ] Consistent Hashing
 - [ ] Gossip Protocol
+- [ ] Interview DeepDive
