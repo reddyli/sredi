@@ -143,7 +143,7 @@ class StreamCommandTest {
             List<List<StreamValue>> result = List.of(
                 List.of(new StreamValue(id, values))
             );
-            when(mockRepository.xread(List.of("mystream"), List.of("0"), null)).thenReturn(result);
+            when(mockRepository.xread(List.of("mystream"), List.of("0"))).thenReturn(result);
 
             // Act
             XreadCommand cmd = new XreadCommand();
@@ -158,7 +158,7 @@ class StreamCommandTest {
             // Assert
             String resultStr = new String(cmdResult);
             assertTrue(resultStr.startsWith("*")); // Array response
-            verify(mockRepository).xread(List.of("mystream"), List.of("0"), null);
+            verify(mockRepository).xread(List.of("mystream"), List.of("0"));
         }
     }
 }

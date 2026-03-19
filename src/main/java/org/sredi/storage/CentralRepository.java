@@ -22,7 +22,7 @@ import org.sredi.streams.IllegalStreamItemIdException;
 import org.sredi.streams.StreamData;
 import org.sredi.streams.StreamId;
 import org.sredi.streams.StreamValue;
-import org.sredi.streams.StreamsWaitManager;
+
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -30,15 +30,14 @@ import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.stream.Collectors;
 
 /**
  * Core data repository that manages key-value storage, client connections, and command execution.
@@ -265,24 +264,16 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
         return storedData.getStreamValue().queryRange(start, end);
     }
 
-    // Reads from multiple streams, optionally blocking until new data arrives
-    public List<List<StreamValue>> xread(
-            List<String> keys, List<String> startValues, Long timeoutMillis)
+    // Reads next entries from multiple streams after the given start IDs
+    public List<List<StreamValue>> xread(List<String> keys, List<String> startValues)
             throws IllegalStreamItemIdException {
-        Map<String, StreamData> streams = keys.stream()
-                .collect(Collectors.toMap(
-                        k -> k,
-                        k -> getOrCreateStreamData(k).getStreamValue()));
-
-        Map<String, StreamId> startIds = new HashMap<>();
+        List<List<StreamValue>> results = new ArrayList<>();
         for (int i = 0; i < keys.size(); i++) {
-            String key = keys.get(i);
-            startIds.put(key, streams.get(key).getStreamIdForRead(startValues.get(i)));
+            StreamData stream = getOrCreateStreamData(keys.get(i)).getStreamValue();
+            StreamId startId = stream.getStreamIdForRead(startValues.get(i));
+            results.add(stream.readNextValues(StreamData.MAX_READ_COUNT, startId));
         }
-
-        Map<String, List<StreamValue>> values = StreamsWaitManager.INSTANCE.readWithWait(
-                streams, startIds, 0, clock, timeoutMillis == null ? 1L : timeoutMillis);
-        return keys.stream().map(values::get).toList();
+        return results;
     }
 
     // Gets or creates a stream data structure for the given key

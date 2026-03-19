@@ -29,7 +29,6 @@ public class StreamData {
 
         streamIds.add(streamId);
         dataValues.put(streamId, values);
-        StreamsWaitManager.INSTANCE.addNotify(streamKey);
         return streamId;
     }
 

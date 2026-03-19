@@ -1,17 +1,41 @@
-r# SREDI
+# SREDI
 
 A High Performance, distributed in-memory storage system written in Java.
 
-## Features
+## Commands
 
 | Category | Supported |
 |----------|-----------|
-| Commands | GET, SET, DEL, INCR, TYPE, KEYS |
+| Basic | PING, ECHO, GET, SET, DEL, INCR, TYPE, KEYS, INFO, CONFIG |
 | Streams | XADD, XRANGE, XREAD |
 | Replication | PSYNC, REPLCONF, WAIT |
 | Transactions | MULTI, EXEC, DISCARD |
-| Persistence | RDB file reading |
+
+## Features
+
+### Current
+| Feature | Description |
+|---------|-------------|
+| Streams | Append-only logs with blocking reads (XREAD BLOCK) |
+| Replication | Leader-follower with full resync and command propagation |
+| Transactions | MULTI/EXEC/DISCARD with per-connection command queuing |
+| Persistence | RDB file reading on startup |
 | Protocol | RESP (Redis Serialization Protocol) |
+
+### Upcoming
+| Feature | Description |
+|---------|-------------|
+| Lists | LPUSH, RPUSH, LPOP, RPOP, LRANGE |
+| AUTH | Password authentication |
+| TTL Background Cleanup | Active expiration thread |
+| LRU Eviction | Cache eviction with maxmemory config |
+| Rate Limiting | Token bucket algorithm |
+| Max Connections | Resource management with semaphores |
+| Read-Write Locks | Concurrent reads, exclusive writes |
+| Pipelining | Batch command processing |
+| Pub/Sub | SUBSCRIBE, PUBLISH messaging |
+| Backpressure | Flow control when followers lag |
+| Leader Election | Bully algorithm |
 
 ## Getting Started
 
@@ -37,19 +61,3 @@ docker run -p 6379:6379 -v /path/to/data:/data reddyli/sredi --dir /data --dbfil
 | `--replicaof-port` | Leader port for replication | - |
 | `--dir` | Directory for persistence files | - |
 | `--dbfilename` | RDB filename | dump.rdb |
-
-
-## TODO
-
-- [ ] EXISTS command
-- [ ] Lists (LPUSH, RPUSH, LPOP, RPOP, LRANGE, LLEN)
-- [ ] RDB Writing (SAVE/BGSAVE)
-- [ ] AOF
-- [ ] AOF Rewrite
-- [ ] Pipelining
-- [ ] AUTH
-- [ ] Memory Limits and LRU
-- [ ] Leader Election
-- [ ] Consistent Hashing
-- [ ] Gossip Protocol
-- [ ] Interview DeepDive
