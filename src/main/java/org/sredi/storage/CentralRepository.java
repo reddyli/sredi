@@ -30,11 +30,7 @@ import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -282,7 +278,71 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
                 k -> new StoredData(new StreamData(k), clock.millis(), null));
     }
 
+    private StoredData getOrCreateListData(String key) {
+        return dataStore.computeIfAbsent(
+                key,
+                k -> new StoredData(new LinkedList<String>(), clock.millis(), null));
+    }
 
+
+    // LIST specific methods
+    public long lpush(String key, String value) {
+        List<String> list = getOrCreateListData(key).getListValue();
+        list.addFirst(value);
+        return list.size();
+    }
+
+    public long rpush(String key, String value) {
+        List<String> list = getOrCreateListData(key).getListValue();
+        list.addLast(value);
+        return list.size();
+    }
+
+    public String lpop(String key) {
+        StoredData storedData = dataStore.get(key);
+        if (storedData == null) return null;
+
+        LinkedList<String> list = storedData.getListValue();
+        if (list.isEmpty()) return null;
+
+        String value = list.removeFirst();
+        if (list.isEmpty()) dataStore.remove(key);
+        return value;
+    }
+
+    public String rpop(String key) {
+        StoredData storedData = dataStore.get(key);
+        if (storedData == null) return null;
+
+        LinkedList<String> list = storedData.getListValue();
+        if (list.isEmpty()) return null;
+
+        String value = list.removeLast();
+        if (list.isEmpty()) dataStore.remove(key);
+        return value;
+    }
+
+    public List<String> lrange(String key, int start, int end) {
+        StoredData storedData = dataStore.get(key);
+        if (storedData == null) return List.of();
+
+        List<String> list = storedData.getListValue();
+        int size = list.size();
+        if (size == 0) return List.of();
+
+        // Convert negative indices
+        if (start < 0) start = size + start;
+        if (end < 0) end = size + end;
+
+        // Clamp to bounds
+        start = Math.max(0, start);
+        end = Math.min(size - 1, end);
+
+        if (start > end) return List.of();
+
+        // subList end is exclusive, Redis end is inclusive
+        return new ArrayList<>(list.subList(start, end + 1));
+    }
     // Subclasses implement this to handle command execution and replication
     public abstract void execute(Command command, ClientConnection conn) throws IOException;
 

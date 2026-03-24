@@ -1,6 +1,8 @@
 package org.sredi.storage;
 
 import java.util.Arrays;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Objects;
 
 import lombok.Getter;
@@ -10,9 +12,19 @@ import org.sredi.streams.StreamData;
 public class StoredData {
     private final byte[] value;
     private final StreamData streamValue;
+    private final LinkedList<String> listValue;
     private final StoredDataType type;
     private final long storedAt;
     private final Long ttlMillis;
+
+    public StoredData(List<String> listValue , long storedAt, Long ttlMillis) {
+        this.listValue = new LinkedList<>(listValue);
+        this.storedAt = storedAt;
+        this.ttlMillis = ttlMillis;
+        this.streamValue = null;
+        this.type = StoredDataType.LIST;
+        this.value = null;
+    }
 
     public StoredData(StreamData streamValue, long storedAt, Long ttlMillis) {
         this.value = null;
@@ -20,6 +32,7 @@ public class StoredData {
         this.type = StoredDataType.STREAM;
         this.storedAt = storedAt;
         this.ttlMillis = ttlMillis;
+        this.listValue = null;
     }
 
     public StoredData(byte[] value, long storedAt, Long ttlMillis) {
@@ -28,6 +41,7 @@ public class StoredData {
         this.type = StoredDataType.STRING;
         this.storedAt = storedAt;
         this.ttlMillis = ttlMillis;
+        this.listValue = null;
     }
 
     public boolean isExpired(long currentTimeMillis) {

@@ -34,6 +34,11 @@ public class CommandConstructor {
         case INCR -> new IncrCommand();
         case INFO -> new InfoCommand();
         case KEYS -> new KeysCommand();
+        case LPUSH -> new LPushCommand();
+        case RPUSH -> new RPushCommand();
+        case LPOP -> new LPopCommand();
+        case RPOP -> new RPopCommand();
+        case LRANGE -> new LRangeCommand();
         case MULTI -> new MultiCommand();
         case EXEC -> new ExecCommand();
         case DISCARD -> new DiscardCommand();

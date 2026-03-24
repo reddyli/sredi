@@ -3,6 +3,7 @@ package org.sredi.commands;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import java.util.List;
 import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -14,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespConstants;
 import org.sredi.resp.RespSimpleStringValue;
+import org.sredi.resp.RespValue;
 import org.sredi.storage.CentralRepository;
 import org.sredi.storage.StoredData;
 
@@ -249,6 +251,108 @@ class CommandTest {
 
             // Verify
             assertEquals("+none\r\n", new String(result));
+        }
+    }
+
+    @Nested
+    class ListCommandTests {
+
+        @Test
+        void lpushReturnsListSize() {
+            when(mockRepository.lpush("mylist", "hello")).thenReturn(1L);
+
+            LPushCommand cmd = new LPushCommand();
+            cmd.setArgs(new RespValue[] { bulkString("LPUSH"), bulkString("mylist"), bulkString("hello") });
+            byte[] result = cmd.execute(mockRepository);
+
+            assertEquals(":1\r\n", new String(result));
+        }
+
+        @Test
+        void rpushReturnsListSize() {
+            when(mockRepository.rpush("mylist", "world")).thenReturn(2L);
+
+            RPushCommand cmd = new RPushCommand();
+            cmd.setArgs(new RespValue[] { bulkString("RPUSH"), bulkString("mylist"), bulkString("world") });
+            byte[] result = cmd.execute(mockRepository);
+
+            assertEquals(":2\r\n", new String(result));
+        }
+
+        @Test
+        void lpopReturnsValue() {
+            when(mockRepository.lpop("mylist")).thenReturn("hello");
+
+            LPopCommand cmd = new LPopCommand();
+            cmd.setArgs(new RespValue[] { bulkString("LPOP"), bulkString("mylist") });
+            byte[] result = cmd.execute(mockRepository);
+
+            String response = new String(result);
+            assertTrue(response.contains("hello"));
+        }
+
+        @Test
+        void lpopReturnsNullForMissingKey() {
+            when(mockRepository.lpop("nokey")).thenReturn(null);
+
+            LPopCommand cmd = new LPopCommand();
+            cmd.setArgs(new RespValue[] { bulkString("LPOP"), bulkString("nokey") });
+            byte[] result = cmd.execute(mockRepository);
+
+            assertArrayEquals(RespConstants.NULL, result);
+        }
+
+        @Test
+        void rpopReturnsValue() {
+            when(mockRepository.rpop("mylist")).thenReturn("world");
+
+            RPopCommand cmd = new RPopCommand();
+            cmd.setArgs(new RespValue[] { bulkString("RPOP"), bulkString("mylist") });
+            byte[] result = cmd.execute(mockRepository);
+
+            String response = new String(result);
+            assertTrue(response.contains("world"));
+        }
+
+        @Test
+        void rpopReturnsNullForMissingKey() {
+            when(mockRepository.rpop("nokey")).thenReturn(null);
+
+            RPopCommand cmd = new RPopCommand();
+            cmd.setArgs(new RespValue[] { bulkString("RPOP"), bulkString("nokey") });
+            byte[] result = cmd.execute(mockRepository);
+
+            assertArrayEquals(RespConstants.NULL, result);
+        }
+
+        @Test
+        void lrangeReturnsElements() {
+            when(mockRepository.lrange("mylist", 0, -1)).thenReturn(List.of("a", "b", "c"));
+
+            LRangeCommand cmd = new LRangeCommand();
+            cmd.setArgs(new RespValue[] {
+                bulkString("LRANGE"), bulkString("mylist"), bulkString("0"), bulkString("-1")
+            });
+            byte[] result = cmd.execute(mockRepository);
+
+            String response = new String(result);
+            assertTrue(response.startsWith("*3"));
+            assertTrue(response.contains("a"));
+            assertTrue(response.contains("b"));
+            assertTrue(response.contains("c"));
+        }
+
+        @Test
+        void lrangeReturnsEmptyForMissingKey() {
+            when(mockRepository.lrange("nokey", 0, -1)).thenReturn(List.of());
+
+            LRangeCommand cmd = new LRangeCommand();
+            cmd.setArgs(new RespValue[] {
+                bulkString("LRANGE"), bulkString("nokey"), bulkString("0"), bulkString("-1")
+            });
+            byte[] result = cmd.execute(mockRepository);
+
+            assertEquals("*0\r\n", new String(result));
         }
     }
 }

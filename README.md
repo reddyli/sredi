@@ -7,6 +7,7 @@ A High Performance, distributed in-memory storage system written in Java.
 | Category | Supported |
 |----------|-----------|
 | Basic | PING, ECHO, GET, SET, DEL, INCR, TYPE, KEYS, INFO, CONFIG |
+| Lists | LPUSH, RPUSH, LPOP, RPOP, LRANGE |
 | Streams | XADD, XRANGE, XREAD |
 | Replication | PSYNC, REPLCONF, WAIT |
 | Transactions | MULTI, EXEC, DISCARD |
@@ -16,7 +17,7 @@ A High Performance, distributed in-memory storage system written in Java.
 ### Current
 | Feature | Description |
 |---------|-------------|
-| Streams | Append-only logs with blocking reads (XREAD BLOCK) |
+| Streams | Append-only logs with ID generation and range queries |
 | Replication | Leader-follower with full resync and command propagation |
 | Transactions | MULTI/EXEC/DISCARD with per-connection command queuing |
 | Persistence | RDB file reading on startup |
@@ -25,7 +26,6 @@ A High Performance, distributed in-memory storage system written in Java.
 ### Upcoming
 | Feature | Description |
 |---------|-------------|
-| Lists | LPUSH, RPUSH, LPOP, RPOP, LRANGE |
 | AUTH | Password authentication |
 | TTL Background Cleanup | Active expiration thread |
 | LRU Eviction | Cache eviction with maxmemory config |
