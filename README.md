@@ -6,7 +6,7 @@ A High Performance, distributed in-memory storage system written in Java.
 
 | Category | Supported |
 |----------|-----------|
-| Basic | PING, ECHO, GET, SET, DEL, INCR, TYPE, KEYS, INFO, CONFIG |
+| Basic | PING, ECHO, GET, SET, DEL, INCR, TYPE, KEYS, INFO, CONFIG, AUTH |
 | Lists | LPUSH, RPUSH, LPOP, RPOP, LRANGE |
 | Streams | XADD, XRANGE, XREAD |
 | Replication | PSYNC, REPLCONF, WAIT |
@@ -21,12 +21,12 @@ A High Performance, distributed in-memory storage system written in Java.
 | Replication | Leader-follower with full resync and command propagation |
 | Transactions | MULTI/EXEC/DISCARD with per-connection command queuing |
 | Persistence | RDB file reading on startup |
+| Authentication | Password-based AUTH with per-connection tracking |
 | Protocol | RESP (Redis Serialization Protocol) |
 
 ### Upcoming
 | Feature | Description |
 |---------|-------------|
-| AUTH | Password authentication |
 | TTL Background Cleanup | Active expiration thread |
 | LRU Eviction | Cache eviction with maxmemory config |
 | Rate Limiting | Token bucket algorithm |
@@ -61,3 +61,8 @@ docker run -p 6379:6379 -v /path/to/data:/data reddyli/sredi --dir /data --dbfil
 | `--replicaof-port` | Leader port for replication | - |
 | `--dir` | Directory for persistence files | - |
 | `--dbfilename` | RDB filename | dump.rdb |
+
+
+## Performance
+
+TODO - Benchmarks, throughput limits, and comparison with Redis.

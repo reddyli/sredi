@@ -360,6 +360,12 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
         log.debug("Received client command: {}", command);
         setCurrentConnection(conn);
 
+        // Auth check: reject non-AUTH commands if connection is not authenticated
+        if (isAuthRequired() && !conn.isAuthenticated() && command.getType() != Command.Type.AUTH) {
+            conn.sendError("NOAUTH Authentication required");
+            return;
+        }
+
         try {
             if (command.isBlockingCommand()) {
                 commandsExecutorService.submit(() -> {
@@ -476,5 +482,20 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
         synchronized (connectionLock) {
             return currentConnection;
         }
+    }
+
+    // Checks password and marks current connection as authenticated
+    public boolean authenticate(String password) {
+        String requiredPassword = options.getPassword();
+        if (requiredPassword != null && requiredPassword.equals(password)) {
+            getCurrentConnection().setAuthenticated(true);
+            return true;
+        }
+        return false;
+    }
+
+    // Returns true if auth is required and current connection is not authenticated
+    public boolean isAuthRequired() {
+        return options.getPassword() != null;
     }
 }

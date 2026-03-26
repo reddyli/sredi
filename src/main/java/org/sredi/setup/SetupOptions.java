@@ -20,6 +20,7 @@ public class SetupOptions {
     private int replicaofPort = ReplicationConstants.DEFAULT_PORT;
     private String dir = ".";
     private String dbfilename;
+    private transient String password;
 
     public boolean parseArgs(String[] args) {
         Options options = new Options();
@@ -46,6 +47,12 @@ public class SetupOptions {
                 .longOpt("dbfilename")
                 .hasArg(true)
                 .desc("The name of the RDB file")
+                .build());
+
+        options.addOption(Option.builder()
+                .longOpt("requirepass")
+                .hasArg(true)
+                .desc("Password")
                 .build());
 
         CommandLineParser parser = new DefaultParser();
@@ -80,6 +87,11 @@ public class SetupOptions {
             if (cmd.hasOption("dbfilename")) {
                 dbfilename = cmd.getOptionValue("dbfilename");
                 log.info("Dbfilename specified: {}", dbfilename);
+            }
+
+            if(cmd.hasOption("requirepass")) {
+                password = cmd.getOptionValue("requirepass");
+                log.info("Authentication Enabled");
             }
 
         } catch (ParseException e) {

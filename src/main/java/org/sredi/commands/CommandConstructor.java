@@ -27,6 +27,7 @@ public class CommandConstructor {
         Command.Type commandType = Command.Type.of(commandName);
         log.debug("Command {} has been created", commandName);
         Command command = switch (commandType) {
+        case AUTH -> new AuthCommand();
         case CONFIG -> new ConfigCommand();
         case ECHO -> new EchoCommand();
         case GET -> new GetCommand();

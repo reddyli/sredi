@@ -6,6 +6,8 @@ import java.io.IOException;
 import java.net.Socket;
 import java.util.Objects;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sredi.io.BufferedInputLineReader;
@@ -27,6 +29,10 @@ public class ClientConnection {
     private final RespValueParser valueParser;
     private final BufferedInputLineReader reader;
     private final BufferedResponseStreamWriter writer;
+    
+    @Setter
+    @Getter
+    private boolean authenticated;
 
     public ClientConnection(Socket clientSocket, RespValueParser valueParser) throws IOException {
         this.clientSocket = clientSocket;
