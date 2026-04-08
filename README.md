@@ -15,19 +15,19 @@ A High Performance, distributed in-memory storage system written in Java.
 ## Features
 
 ### Current
-| Feature | Description |
-|---------|-------------|
-| Streams | Append-only logs with ID generation and range queries |
+| Feature | Description                                              |
+|---------|----------------------------------------------------------|
+| Streams | Append-only logs with ID generation and range queries    |
 | Replication | Leader-follower with full resync and command propagation |
-| Transactions | MULTI/EXEC/DISCARD with per-connection command queuing |
-| Persistence | RDB file reading on startup |
-| Authentication | Password-based AUTH with per-connection tracking |
-| Protocol | RESP (Redis Serialization Protocol) |
+| Transactions | MULTI/EXEC/DISCARD with per-connection command queuing   |
+| Persistence | RDB file reading on startup                              |
+| Authentication | Password-based AUTH with per-connection tracking         |
+| TTL Background Cleanup | Scheduled active expiration of keys to prevent leaks     |
+| Protocol | RESP (Redis Serialization Protocol)                      |
 
 ### Upcoming
 | Feature | Description |
 |---------|-------------|
-| TTL Background Cleanup | Active expiration thread |
 | LRU Eviction | Cache eviction with maxmemory config |
 | Rate Limiting | Token bucket algorithm |
 | Max Connections | Resource management with semaphores |
@@ -61,6 +61,7 @@ docker run -p 6379:6379 -v /path/to/data:/data reddyli/sredi --dir /data --dbfil
 | `--replicaof-port` | Leader port for replication | - |
 | `--dir` | Directory for persistence files | - |
 | `--dbfilename` | RDB filename | dump.rdb |
+| `--requirepass` | Password for AUTH | - |
 
 
 ## Performance

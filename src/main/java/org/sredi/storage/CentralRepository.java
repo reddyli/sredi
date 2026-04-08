@@ -31,9 +31,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 
 /**
  * Core data repository that manages key-value storage, client connections, and command execution.
@@ -55,6 +53,7 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
     // Thread pools for handling connections and executing blocking commands
     private final ExecutorService connectionsExecutorService;
     private final ExecutorService commandsExecutorService;
+    private final ScheduledExecutorService cleanupExecutorService;
 
     // Manages all active client connections
     @Getter
@@ -100,6 +99,7 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
 
         this.connectionsExecutorService = Executors.newFixedThreadPool(CONNECTION_THREAD_POOL_SIZE);
         this.commandsExecutorService = Executors.newCachedThreadPool();
+        this.cleanupExecutorService = Executors.newScheduledThreadPool(1);
 
         this.transactionManager = new TransactionManager(
                 this::getCurrentConnection,
@@ -139,6 +139,17 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
         eventLoop = new EventLoop(this, commandConstructor);
         startAcceptThread();
         connectionManager.start(connectionsExecutorService);
+
+        // Background cleanup of expired keys
+        cleanupExecutorService.scheduleAtFixedRate(() -> {
+            for (String key : dataStore.keySet()) {
+                StoredData data = dataStore.get(key);
+                if (data != null && isExpired(data)) {
+                    delete(key);
+                }
+            }
+        }, 10, 30, TimeUnit.SECONDS);
+
     }
 
     // Runs a background thread that accepts incoming socket connections
@@ -190,6 +201,7 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
     public void shutdown() {
         connectionsExecutorService.shutdown();
         commandsExecutorService.shutdown();
+        cleanupExecutorService.shutdown();
     }
 
     // Returns a configuration value by name (e.g., dir, dbfilename)
