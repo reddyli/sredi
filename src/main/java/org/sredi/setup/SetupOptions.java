@@ -21,6 +21,7 @@ public class SetupOptions {
     private String dir = ".";
     private String dbfilename;
     private transient String password;
+    private int maxKeys = -1; // -1 means no limit
 
     public boolean parseArgs(String[] args) {
         Options options = new Options();
@@ -53,6 +54,12 @@ public class SetupOptions {
                 .longOpt("requirepass")
                 .hasArg(true)
                 .desc("Password")
+                .build());
+
+        options.addOption(Option.builder()
+                .longOpt("maxkeys")
+                .hasArg(true)
+                .desc("Maximum number of keys before LRU eviction")
                 .build());
 
         CommandLineParser parser = new DefaultParser();
@@ -92,6 +99,11 @@ public class SetupOptions {
             if(cmd.hasOption("requirepass")) {
                 password = cmd.getOptionValue("requirepass");
                 log.info("Authentication Enabled");
+            }
+
+            if(cmd.hasOption("maxkeys")) {
+                maxKeys = Integer.parseInt(cmd.getOptionValue("maxkeys"));
+                log.info("Max keys specified: {}", maxKeys);
             }
 
         } catch (ParseException e) {

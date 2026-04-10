@@ -22,13 +22,13 @@ A High Performance, distributed in-memory storage system written in Java.
 | Transactions | MULTI/EXEC/DISCARD with per-connection command queuing   |
 | Persistence | RDB file reading on startup                              |
 | Authentication | Password-based AUTH with per-connection tracking         |
-| TTL Background Cleanup | Scheduled active expiration of keys to prevent leaks     |
-| Protocol | RESP (Redis Serialization Protocol)                      |
+| TTL Background Cleanup | Scheduled active expiration of keys |
+| LRU Eviction | Least recently used eviction with maxkeys config |
+| Protocol | RESP (Redis Serialization Protocol) |
 
 ### Upcoming
 | Feature | Description |
 |---------|-------------|
-| LRU Eviction | Cache eviction with maxmemory config |
 | Rate Limiting | Token bucket algorithm |
 | Max Connections | Resource management with semaphores |
 | Read-Write Locks | Concurrent reads, exclusive writes |
@@ -62,6 +62,7 @@ docker run -p 6379:6379 -v /path/to/data:/data reddyli/sredi --dir /data --dbfil
 | `--dir` | Directory for persistence files | - |
 | `--dbfilename` | RDB filename | dump.rdb |
 | `--requirepass` | Password for AUTH | - |
+| `--maxkeys` | Max keys before LRU eviction | -1 (no limit) |
 
 
 ## Performance

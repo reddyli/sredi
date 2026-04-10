@@ -70,6 +70,9 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
     // In-memory key-value data store
     private final Map<String, StoredData> dataStore = new ConcurrentHashMap<>();
 
+    // LRU Store
+    private final LRU lruStore = new LRU();
+
     // Handles MULTI/EXEC transaction queuing per connection
     private final TransactionManager transactionManager;
     private ClientConnection currentConnection;
@@ -222,17 +225,34 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
 
     // Retrieves the stored data for a key
     public StoredData get(String key) {
+
+        lruStore.logKeyAccess(key);
         return dataStore.get(key);
     }
 
     // Stores data for a key, returning any previous value
     public StoredData set(String key, StoredData storedData) {
+        evictIfNeeded(key);
+        lruStore.logKeyAccess(key);
         return dataStore.put(key, storedData);
+    }
+
+    // Evicts the LRU key if at capacity and the key is new
+    private void evictIfNeeded(String key) {
+        int maxKeys = options.getMaxKeys();
+        if (maxKeys > 0 && !dataStore.containsKey(key) && lruStore.size() >= maxKeys) {
+            String evictedKey = lruStore.evictLRUKey();
+            if (evictedKey != null) {
+                dataStore.remove(evictedKey);
+                log.info("LRU evicted key: {}", evictedKey);
+            }
+        }
     }
 
     // Removes a key from the data store
     public void delete(String key) {
         dataStore.remove(key);
+        lruStore.remove(key);
     }
 
     // Returns all keys in the data store
@@ -261,6 +281,8 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
     // Appends an entry to a stream, creating the stream if it doesn't exist
     public StreamId xadd(String key, String itemId, RespValue[] itemMap)
             throws IllegalStreamItemIdException {
+        evictIfNeeded(key);
+        lruStore.logKeyAccess(key);
         StoredData storedData = getOrCreateStreamData(key);
         return storedData.getStreamValue().add(itemId, clock, itemMap);
     }
@@ -268,6 +290,7 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
     // Returns entries from a stream within the given ID range
     public List<StreamValue> xrange(String key, String start, String end)
             throws IllegalStreamItemIdException {
+        lruStore.logKeyAccess(key);
         StoredData storedData = getOrCreateStreamData(key);
         return storedData.getStreamValue().queryRange(start, end);
     }
@@ -277,6 +300,7 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
             throws IllegalStreamItemIdException {
         List<List<StreamValue>> results = new ArrayList<>();
         for (int i = 0; i < keys.size(); i++) {
+            lruStore.logKeyAccess(keys.get(i));
             StreamData stream = getOrCreateStreamData(keys.get(i)).getStreamValue();
             StreamId startId = stream.getStreamIdForRead(startValues.get(i));
             results.add(stream.readNextValues(StreamData.MAX_READ_COUNT, startId));
@@ -299,12 +323,16 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
 
     // LIST specific methods
     public long lpush(String key, String value) {
+        evictIfNeeded(key);
+        lruStore.logKeyAccess(key);
         List<String> list = getOrCreateListData(key).getListValue();
         list.addFirst(value);
         return list.size();
     }
 
     public long rpush(String key, String value) {
+        evictIfNeeded(key);
+        lruStore.logKeyAccess(key);
         List<String> list = getOrCreateListData(key).getListValue();
         list.addLast(value);
         return list.size();
@@ -314,11 +342,12 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
         StoredData storedData = dataStore.get(key);
         if (storedData == null) return null;
 
+        lruStore.logKeyAccess(key);
         LinkedList<String> list = storedData.getListValue();
         if (list.isEmpty()) return null;
 
         String value = list.removeFirst();
-        if (list.isEmpty()) dataStore.remove(key);
+        if (list.isEmpty()) delete(key);
         return value;
     }
 
@@ -326,17 +355,19 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
         StoredData storedData = dataStore.get(key);
         if (storedData == null) return null;
 
+        lruStore.logKeyAccess(key);
         LinkedList<String> list = storedData.getListValue();
         if (list.isEmpty()) return null;
 
         String value = list.removeLast();
-        if (list.isEmpty()) dataStore.remove(key);
+        if (list.isEmpty()) delete(key);
         return value;
     }
 
     public List<String> lrange(String key, int start, int end) {
         StoredData storedData = dataStore.get(key);
         if (storedData == null) return List.of();
+        lruStore.logKeyAccess(key);
 
         List<String> list = storedData.getListValue();
         int size = list.size();
