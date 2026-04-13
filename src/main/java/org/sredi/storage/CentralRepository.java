@@ -98,7 +98,7 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
         this.clock = clock;
         this.commandConstructor = new CommandConstructor();
         this.valueParser = new RespValueParser();
-        this.connectionManager = new ConnectionManager();
+        this.connectionManager = new ConnectionManager(options.getMaxClients());
 
         this.connectionsExecutorService = Executors.newFixedThreadPool(CONNECTION_THREAD_POOL_SIZE);
         this.commandsExecutorService = Executors.newCachedThreadPool();
@@ -163,7 +163,14 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
                     Socket clientSocket = serverSocket.accept();
                     configureSocket(clientSocket);
                     ClientConnection conn = new ClientConnection(clientSocket, valueParser);
-                    connectionManager.addConnection(conn);
+                    if (options.getMaxRps() > 0) {
+                        conn.setRateLimiter(new RateLimiter(options.getMaxRps()));
+                    }
+                    if (!connectionManager.addConnection(conn)) {
+                        log.warn("Max clients reached, rejecting connection");
+                        conn.close();
+                        continue;
+                    }
                     log.debug("Connection accepted from client: {}", conn);
                 } catch (IOException e) {
                     if (!shutdownRequested) {
@@ -406,6 +413,12 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
         // Auth check: reject non-AUTH commands if connection is not authenticated
         if (isAuthRequired() && !conn.isAuthenticated() && command.getType() != Command.Type.AUTH) {
             conn.sendError("NOAUTH Authentication required");
+            return;
+        }
+
+        // Rate limit check
+        if (conn.getRateLimiter() != null && !conn.getRateLimiter().tryConsume()) {
+            conn.sendError("ERR rate limit exceeded");
             return;
         }
 

@@ -5,10 +5,7 @@ import java.util.Deque;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Queue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.*;
 import java.util.function.BiConsumer;
 
 import org.slf4j.Logger;
@@ -28,6 +25,12 @@ public class ConnectionManager {
 
     // Per-connection queue of parsed RESP values waiting to be processed
     private final Map<ClientConnection, Queue<RespValue>> pendingValues = new ConcurrentHashMap<>();
+
+    private final Semaphore connectionSemaphore;
+
+    public ConnectionManager(int maxClients) {
+        this.connectionSemaphore = maxClients > 0 ? new Semaphore(maxClients) : null;
+    }
 
     // Starts the background thread that reads from all connections
     public void start(ExecutorService executorService) {
@@ -56,6 +59,7 @@ public class ConnectionManager {
                 log.debug("Removing closed connection: {}", conn);
                 pendingValues.remove(conn);
                 iter.remove();
+                if (connectionSemaphore != null) connectionSemaphore.release();
                 continue;
             }
 
@@ -97,13 +101,18 @@ public class ConnectionManager {
         return pendingValues.computeIfAbsent(conn, k -> new ConcurrentLinkedQueue<>());
     }
 
-    // Adds a new connection to be managed
-    public void addConnection(ClientConnection conn) {
+    // Adds a new connection to be managed, returns false if at capacity
+    public boolean addConnection(ClientConnection conn) {
+        if (connectionSemaphore != null && !connectionSemaphore.tryAcquire()) {
+            return false;
+        }
         connections.addLast(conn);
+        return true;
     }
 
     // Adds a connection at the front (e.g., leader connection for followers)
     public void addPriorityConnection(ClientConnection conn) {
+        // ideally this is always needed from follower to leader semaphore ignore here
         connections.addFirst(conn);
     }
 
@@ -114,6 +123,7 @@ public class ConnectionManager {
                 if (!conn.isClosed()) {
                     log.debug("Closing connection: {}", conn);
                     conn.close();
+                    if (connectionSemaphore != null) connectionSemaphore.release();
                 }
             } catch (IOException e) {
                 log.error("Error closing connection: {}", e.getMessage());

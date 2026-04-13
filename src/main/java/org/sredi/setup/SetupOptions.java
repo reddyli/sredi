@@ -22,6 +22,8 @@ public class SetupOptions {
     private String dbfilename;
     private transient String password;
     private int maxKeys = -1; // -1 means no limit
+    private int maxClients = 100;
+    private int maxRps = -1; // -1 means no limit
 
     public boolean parseArgs(String[] args) {
         Options options = new Options();
@@ -60,6 +62,18 @@ public class SetupOptions {
                 .longOpt("maxkeys")
                 .hasArg(true)
                 .desc("Maximum number of keys before LRU eviction")
+                .build());
+
+        options.addOption(Option.builder()
+                .longOpt("maxclients")
+                .hasArg(true)
+                .desc("Maximum number of concurrent client connections")
+                .build());
+
+        options.addOption(Option.builder()
+                .longOpt("maxrps")
+                .hasArg(true)
+                .desc("Maximum requests per second per client")
                 .build());
 
         CommandLineParser parser = new DefaultParser();
@@ -104,6 +118,16 @@ public class SetupOptions {
             if(cmd.hasOption("maxkeys")) {
                 maxKeys = Integer.parseInt(cmd.getOptionValue("maxkeys"));
                 log.info("Max keys specified: {}", maxKeys);
+            }
+
+            if(cmd.hasOption("maxclients")) {
+                maxClients = Integer.parseInt(cmd.getOptionValue("maxclients"));
+                log.info("Max clients specified: {}", maxClients);
+            }
+
+            if(cmd.hasOption("maxrps")) {
+                maxRps = Integer.parseInt(cmd.getOptionValue("maxrps"));
+                log.info("Max requests per second specified: {}", maxRps);
             }
 
         } catch (ParseException e) {

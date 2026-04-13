@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.sredi.io.BufferedInputLineReader;
 import org.sredi.io.BufferedResponseStreamWriter;
 import org.sredi.resp.RespSimpleErrorValue;
+import org.sredi.storage.RateLimiter;
 import org.sredi.resp.RespValue;
 import org.sredi.resp.RespValueBase;
 import org.sredi.resp.RespValueContext;
@@ -33,6 +34,10 @@ public class ClientConnection {
     @Setter
     @Getter
     private boolean authenticated;
+
+    @Getter
+    @Setter
+    private RateLimiter rateLimiter;
 
     public ClientConnection(Socket clientSocket, RespValueParser valueParser) throws IOException {
         this.clientSocket = clientSocket;
