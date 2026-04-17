@@ -37,6 +37,11 @@ public class DelCommand extends Command{
     }
 
     @Override
+    public String getKey() {
+        return keys.length > 0 ? keys[0].getValueAsString() : null;
+    }
+
+    @Override
     public String toString() {
         return "";
     }

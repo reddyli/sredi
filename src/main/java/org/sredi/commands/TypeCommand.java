@@ -33,15 +33,6 @@ public class TypeCommand extends Command {
     }
 
     /**
-     * Types the key for the TYPE command.
-     *
-     * @return the key for the TYPE command
-     */
-    public RespBulkString getKey() {
-        return key;
-    }
-
-    /**
      * Sets the command arguments by parsing the provided RespValue array. The arguments should
      * contain the key as the first element.
      *
@@ -64,6 +55,11 @@ public class TypeCommand extends Command {
      *
      * @return a string representation of the TypeCommand object
      */
+    @Override
+    public String getKey() {
+        return key.getValueAsString();
+    }
+
     @Override
     public String toString() {
         return "TypeCommand [key=" + key + "]";

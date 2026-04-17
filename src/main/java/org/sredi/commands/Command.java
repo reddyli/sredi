@@ -3,6 +3,7 @@ package org.sredi.commands;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 import lombok.Getter;
@@ -11,6 +12,7 @@ import org.sredi.resp.RespValue;
 
 @Getter
 public abstract class Command {
+    
     public enum Type {
         AUTH, CONFIG, DEL, ECHO, GET, INCR, INFO, KEYS, LPUSH, RPUSH, LPOP, RPOP, LRANGE, MULTI, EXEC, DISCARD, PING, PSYNC, REPLCONF, SET, TYPE, WAIT, XADD, XRANGE,
         XREAD,
@@ -23,6 +25,14 @@ public abstract class Command {
             } catch (Exception e) {
                 return null;
             }
+        }
+        
+        private static final Set<Type> WRITE_COMMANDS = Set.of(
+                SET, DEL, INCR, LPUSH, RPUSH, LPOP, RPOP, XADD
+        );
+
+        public boolean isWrite() {
+            return WRITE_COMMANDS.contains(this);
         }
     }
 
@@ -75,6 +85,11 @@ public abstract class Command {
                     String.format("%s: Invalid or missing argument at index. %d, %s", type.name(),
                             i, Arrays.toString(args)));
         }
+    }
+
+    // Returns the key this command operates on, or null for key-less commands
+    public String getKey() {
+        return null;
     }
 
     public abstract byte[] execute(CentralRepository service);

@@ -26,12 +26,12 @@ A High Performance, distributed in-memory storage system written in Java.
 | LRU Eviction | Least recently used eviction with maxkeys config |
 | Max Connections | Semaphore-based connection limiting |
 | Rate Limiting | Per-client token bucket rate limiting |
+| Parallel Execution | Opt-in multi-threaded commands with striped read-write locks |
 | Protocol | RESP (Redis Serialization Protocol) |
 
 ### Upcoming
 | Feature | Description |
 |---------|-------------|
-| Read-Write Locks | Concurrent reads, exclusive writes |
 | Pipelining | Batch command processing |
 | Pub/Sub | SUBSCRIBE, PUBLISH messaging |
 | Backpressure | Flow control when followers lag |
@@ -65,6 +65,8 @@ docker run -p 6379:6379 -v /path/to/data:/data reddyli/sredi --dir /data --dbfil
 | `--maxkeys` | Max keys before LRU eviction | -1 (no limit) |
 | `--maxclients` | Max concurrent connections | 100 |
 | `--maxrps` | Max requests per second per client | -1 (no limit) |
+| `--parallel` | Enable parallel command execution | false |
+| `--parallel-threads` | Number of worker threads | CPU cores |
 
 
 ## Performance

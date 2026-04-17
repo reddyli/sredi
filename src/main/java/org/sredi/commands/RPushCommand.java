@@ -34,6 +34,9 @@ public class RPushCommand extends Command {
     }
 
     @Override
+    public String getKey() { return key; }
+
+    @Override
     public String toString() {
         return "RPushCommand [key=" + key + ", value=" + value + "]";
     }

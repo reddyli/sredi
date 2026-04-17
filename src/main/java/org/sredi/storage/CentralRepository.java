@@ -61,6 +61,7 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
     private volatile boolean shutdownRequested = false;
 
     // Server configuration and identity
+    @Getter
     private final SetupOptions options;
     @Getter
     private final int port;

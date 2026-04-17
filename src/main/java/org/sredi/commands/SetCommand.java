@@ -181,6 +181,11 @@ public class SetCommand extends Command {
     }
 
     @Override
+    public String getKey() {
+        return key.getValueAsString();
+    }
+
+    @Override
     public String toString() {
         return "SetCommand [key=" + key + ", value=" + value + "]";
     }

@@ -33,6 +33,9 @@ public class RPopCommand extends Command {
     }
 
     @Override
+    public String getKey() { return key; }
+
+    @Override
     public String toString() {
         return "RPopCommand [key=" + key + "]";
     }

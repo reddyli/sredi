@@ -24,6 +24,8 @@ public class SetupOptions {
     private int maxKeys = -1; // -1 means no limit
     private int maxClients = 100;
     private int maxRps = -1; // -1 means no limit
+    private boolean parallel = false;
+    private int parallelThreads = Runtime.getRuntime().availableProcessors();
 
     public boolean parseArgs(String[] args) {
         Options options = new Options();
@@ -74,6 +76,18 @@ public class SetupOptions {
                 .longOpt("maxrps")
                 .hasArg(true)
                 .desc("Maximum requests per second per client")
+                .build());
+
+        options.addOption(Option.builder()
+                .longOpt("parallel")
+                .hasArg(false)
+                .desc("Enable parallel command execution with striped locks")
+                .build());
+
+        options.addOption(Option.builder()
+                .longOpt("parallel-threads")
+                .hasArg(true)
+                .desc("Number of parallel worker threads")
                 .build());
 
         CommandLineParser parser = new DefaultParser();
@@ -128,6 +142,16 @@ public class SetupOptions {
             if(cmd.hasOption("maxrps")) {
                 maxRps = Integer.parseInt(cmd.getOptionValue("maxrps"));
                 log.info("Max requests per second specified: {}", maxRps);
+            }
+
+            if(cmd.hasOption("parallel")) {
+                parallel = true;
+                log.info("Parallel execution enabled");
+            }
+
+            if(cmd.hasOption("parallel-threads")) {
+                parallelThreads = Integer.parseInt(cmd.getOptionValue("parallel-threads"));
+                log.info("Parallel threads specified: {}", parallelThreads);
             }
 
         } catch (ParseException e) {

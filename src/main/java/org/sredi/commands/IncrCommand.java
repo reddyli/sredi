@@ -64,6 +64,11 @@ public class IncrCommand extends Command{
     }
 
     @Override
+    public String getKey() {
+        return key.getValueAsString();
+    }
+
+    @Override
     public String toString() {
         return "IncrCommand{" +
                 "key=" + key +

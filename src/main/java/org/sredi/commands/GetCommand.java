@@ -50,6 +50,11 @@ public class GetCommand extends Command {
     }
 
     @Override
+    public String getKey() {
+        return key.getValueAsString();
+    }
+
+    @Override
     public String toString() {
         return "GetCommand [key=" + key + "]";
     }

@@ -82,6 +82,11 @@ public class XreadCommand extends Command {
     }
 
     @Override
+    public String getKey() {
+        return keys.isEmpty() ? null : keys.get(0);
+    }
+
+    @Override
     public String toString() {
         return "XreadCommand [keys=" + keys + ", startValues=" + startValues + "]";
     }
