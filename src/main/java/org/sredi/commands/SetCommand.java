@@ -6,8 +6,8 @@ import java.util.List;
 import java.util.Map;
 
 import lombok.Getter;
-import org.sredi.storage.CentralRepository;
-import org.sredi.storage.StoredData;
+import org.sredi.storage.Orchestrator;
+import org.sredi.storage.DataEntry;
 import org.sredi.resp.RespArrayValue;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespConstants;
@@ -129,7 +129,7 @@ public class SetCommand extends Command {
      *         Otherwise, OK is returned as a simple string response.
      */
     @Override
-    public byte[] execute(CentralRepository service) {
+    public byte[] execute(Orchestrator service) {
         long now = service.getCurrentTime();
         String keyString = key.getValueAsString();
 
@@ -149,12 +149,12 @@ public class SetCommand extends Command {
         boolean doGet = optionsMap.containsKey("get");
 
         Long ttl = getTtl(now);
-        StoredData prevData = null;
+        DataEntry prevData = null;
         if ((doGet || doKeepTtl) && service.containsKey(keyString)) {
             prevData = service.get(keyString);
             ttl = doKeepTtl ? prevData.getTtlMillis() : ttl;
         }
-        StoredData storedData = new StoredData(value.getValue(), now, ttl);
+        DataEntry storedData = new DataEntry(value.getValue(), now, ttl);
         service.set(keyString, storedData);
         return (doGet && prevData != null)
                 ? new RespBulkString(prevData.getValue()).asResponse()

@@ -4,7 +4,7 @@ import java.util.Map;
 
 import org.sredi.resp.RespInteger;
 import org.sredi.resp.RespValue;
-import org.sredi.storage.CentralRepository;
+import org.sredi.storage.Orchestrator;
 
 public class RPushCommand extends Command {
 
@@ -28,7 +28,7 @@ public class RPushCommand extends Command {
     }
 
     @Override
-    public byte[] execute(CentralRepository service) {
+    public byte[] execute(Orchestrator service) {
         long size = service.rpush(key, value);
         return new RespInteger(size).asResponse();
     }

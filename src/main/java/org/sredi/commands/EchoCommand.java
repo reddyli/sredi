@@ -1,6 +1,6 @@
 package org.sredi.commands;
 
-import org.sredi.storage.CentralRepository;
+import org.sredi.storage.Orchestrator;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespConstants;
 import org.sredi.resp.RespValue;
@@ -47,7 +47,7 @@ public class EchoCommand extends Command {
     }
 
     @Override
-    public byte[] execute(CentralRepository service) {
+    public byte[] execute(Orchestrator service) {
         return bulkStringArg != null ? bulkStringArg.asResponse() : RespConstants.NULL;
     }
 

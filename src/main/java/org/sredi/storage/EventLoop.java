@@ -16,7 +16,7 @@ public class EventLoop {
     private static final Logger log = LoggerFactory.getLogger(EventLoop.class);
     private static final long IDLE_SLEEP_MILLIS = 80L;
 
-    private final CentralRepository repository;
+    private final Orchestrator orchestrator;
     private final CommandConstructor commandConstructor;
     private volatile boolean shutdownRequested = false;
 
@@ -24,13 +24,13 @@ public class EventLoop {
     private final ExecutorService parallelCommandExecutorService;
     private final StripedLock stripedLock;
 
-    public EventLoop(CentralRepository repository, CommandConstructor commandConstructor) {
-        this.repository = repository;
+    public EventLoop(Orchestrator orchestrator, CommandConstructor commandConstructor) {
+        this.orchestrator = orchestrator;
         this.commandConstructor = commandConstructor;
-        this.parallel = repository.getOptions().isParallel();
+        this.parallel = orchestrator.getOptions().isParallel();
 
         if (parallel) {
-            int threads = repository.getOptions().getParallelThreads();
+            int threads = orchestrator.getOptions().getParallelThreads();
             this.parallelCommandExecutorService = Executors.newFixedThreadPool(threads);
             this.stripedLock = new StripedLock();
             log.info("Parallel mode enabled with {} threads", threads);
@@ -55,7 +55,7 @@ public class EventLoop {
     }
 
     private boolean processNextCommand() {
-        return repository.getConnectionManager().getNextValue((conn, value) -> {
+        return orchestrator.getConnectionManager().getNextValue((conn, value) -> {
             Command command = commandConstructor.newCommandFromValue(value);
             if (command != null) {
                 if (parallel) {
@@ -69,7 +69,7 @@ public class EventLoop {
                                     stripedLock.readLock(key);
                                 }
                             }
-                            repository.executeCommand(conn, command);
+                            orchestrator.executeCommand(conn, command);
                         } catch (Exception e) {
                             log.error("EventLoop Exception: {} \"{}\"",
                                     e.getClass().getSimpleName(), e.getMessage(), e);
@@ -86,7 +86,7 @@ public class EventLoop {
                     });
                 } else {
                     try {
-                        repository.executeCommand(conn, command);
+                        orchestrator.executeCommand(conn, command);
                     } catch (Exception e) {
                         log.error("EventLoop Exception: {} \"{}\"",
                                 e.getClass().getSimpleName(), e.getMessage(), e);

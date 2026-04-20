@@ -14,14 +14,14 @@ import org.sredi.resp.RespConstants;
 import org.sredi.resp.RespSimpleStringValue;
 import org.sredi.resp.RespValue;
 import org.sredi.setup.SetupOptions;
-import org.sredi.storage.CentralRepository;
+import org.sredi.storage.Orchestrator;
 
 /**
- * Follower (replica) implementation of CentralRepository.
+ * Follower (replica) implementation of Orchestrator.
  * Connects to a leader server, performs handshake, and receives replicated commands.
  * Does not propagate commands further - it's a read replica that stays in sync with the leader.
  */
-public class FollowerService extends CentralRepository {
+public class FollowerService extends Orchestrator {
 
     @Getter
     private final String leaderHost;

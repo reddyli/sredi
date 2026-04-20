@@ -2,7 +2,7 @@ package org.sredi.commands;
 
 import java.util.Map;
 
-import org.sredi.storage.CentralRepository;
+import org.sredi.storage.Orchestrator;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespValue;
 
@@ -46,7 +46,7 @@ public class TypeCommand extends Command {
 
 
     @Override
-    public byte[] execute(CentralRepository service) {
+    public byte[] execute(Orchestrator service) {
         return service.getType(key.getValueAsString()).asResponse();
     }
 

@@ -4,9 +4,9 @@ import lombok.Getter;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespInteger;
 import org.sredi.resp.RespValue;
-import org.sredi.storage.CentralRepository;
-import org.sredi.storage.StoredData;
-import org.sredi.storage.StoredDataType;
+import org.sredi.storage.Orchestrator;
+import org.sredi.storage.DataEntry;
+import org.sredi.storage.DataEntryType;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -30,32 +30,32 @@ public class IncrCommand extends Command{
     }
 
     @Override
-    public byte[] execute(CentralRepository service) {
+    public byte[] execute(Orchestrator service) {
         String keyString = key.getValueAsString();
         long now = service.getCurrentTime();
         
         if(service.containsKey(keyString)) {
-            StoredData data = service.get(keyString);
-            if(data.getType() == StoredDataType.STRING) {
+            DataEntry data = service.get(keyString);
+            if(data.getType() == DataEntryType.STRING) {
                 RespBulkString value = new RespBulkString(data.getValue());
                 Long currentValue = value.getValueAsLong();
                 
                 if(currentValue == null) {
                     // If value cannot be parsed as a number, set it to 0
-                    StoredData newData = new StoredData("0".getBytes(), now, data.getTtlMillis());
+                    DataEntry newData = new DataEntry("0".getBytes(), now, data.getTtlMillis());
                     service.set(keyString, newData);
                     return new RespInteger(0).asResponse();
                 } else {
                     // Increment the value by 1
                     long newValue = currentValue + 1;
-                    StoredData newData = new StoredData(String.valueOf(newValue).getBytes(), now, data.getTtlMillis());
+                    DataEntry newData = new DataEntry(String.valueOf(newValue).getBytes(), now, data.getTtlMillis());
                     service.set(keyString, newData);
                     return new RespInteger(newValue).asResponse();
                 }
             }
         } else {
             // Key doesn't exist, create it with value 0
-            StoredData newData = new StoredData("0".getBytes(), now, null);
+            DataEntry newData = new DataEntry("0".getBytes(), now, null);
             service.set(keyString, newData);
             return new RespInteger(0).asResponse();
         }

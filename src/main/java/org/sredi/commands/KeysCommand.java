@@ -3,7 +3,7 @@ package org.sredi.commands;
 import java.util.List;
 import java.util.Map;
 
-import org.sredi.storage.CentralRepository;
+import org.sredi.storage.Orchestrator;
 import org.sredi.resp.RespArrayValue;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespValue;
@@ -53,7 +53,7 @@ public class KeysCommand extends Command {
     }
 
     @Override
-    public byte[] execute(CentralRepository service) {
+    public byte[] execute(Orchestrator service) {
         List<RespBulkString> keys = service.getKeys().stream().map(String::getBytes).map(RespBulkString::new).toList();
         return new RespArrayValue(keys.toArray(new RespValue[0])).asResponse();
     }

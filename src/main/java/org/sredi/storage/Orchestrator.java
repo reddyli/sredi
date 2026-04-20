@@ -19,10 +19,8 @@ import org.sredi.resp.RespValue;
 import org.sredi.resp.RespValueParser;
 import org.sredi.setup.SetupOptions;
 import org.sredi.streams.IllegalStreamItemIdException;
-import org.sredi.streams.StreamData;
 import org.sredi.streams.StreamId;
 import org.sredi.streams.StreamValue;
-
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -34,12 +32,13 @@ import java.util.*;
 import java.util.concurrent.*;
 
 /**
- * Core data repository that manages key-value storage, client connections, and command execution.
- * This is an abstract class with concrete implementations for Leader and Follower roles.
+ * Core server orchestrator that manages client connections, command execution, and replication.
+ * Data operations are delegated to {@link DataStore}.
+ * Abstract class with concrete implementations: {@link org.sredi.replication.LeaderService} and {@link org.sredi.replication.FollowerService}.
  */
 
-public abstract class CentralRepository implements ReplicationServiceInfoProvider {
-    private static final Logger log = LoggerFactory.getLogger(CentralRepository.class);
+public abstract class Orchestrator implements ReplicationServiceInfoProvider {
+    private static final Logger log = LoggerFactory.getLogger(Orchestrator.class);
 
     private static final Set<String> DEFAULT_INFO_SECTIONS = Set.of("server", "replication", "stats", "replication-graph");
     private static final int CONNECTION_THREAD_POOL_SIZE = 2;
@@ -68,11 +67,9 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
     private final String role;
     protected final Clock clock;
 
-    // In-memory key-value data store
-    private final Map<String, StoredData> dataStore = new ConcurrentHashMap<>();
-
-    // LRU Store
-    private final LRU lruStore = new LRU();
+    // In-memory data store with LRU and eviction
+    @Getter
+    private final DataStore dataStore;
 
     // Handles MULTI/EXEC transaction queuing per connection
     private final TransactionManager transactionManager;
@@ -81,18 +78,18 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
 
 
     // Creates a LeaderService or FollowerService based on the configured role
-    public static CentralRepository newInstance(SetupOptions options, Clock clock) {
+    public static Orchestrator newInstance(SetupOptions options, Clock clock) {
         String role = options.getRole();
         return switch (role) {
             case ReplicationConstants.REPLICA -> new FollowerService(options, clock);
             case ReplicationConstants.MASTER -> new LeaderService(options, clock);
             default -> throw new UnsupportedOperationException(
-                    "Unexpected role type for new repository: " + role);
+                    "Unexpected role type: " + role);
         };
     }
 
     // Initializes thread pools, connection manager, and loads any persisted data
-    protected CentralRepository(SetupOptions options, Clock clock) {
+    protected Orchestrator(SetupOptions options, Clock clock) {
         this.options = options;
         this.port = options.getPort();
         this.role = options.getRole();
@@ -100,6 +97,8 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
         this.commandConstructor = new CommandConstructor();
         this.valueParser = new RespValueParser();
         this.connectionManager = new ConnectionManager(options.getMaxClients());
+
+        this.dataStore = new DataStore(clock, options.getMaxKeys());
 
         this.connectionsExecutorService = Executors.newFixedThreadPool(CONNECTION_THREAD_POOL_SIZE);
         this.commandsExecutorService = Executors.newCachedThreadPool();
@@ -126,7 +125,7 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
         }
 
         try {
-            DatabaseReader reader = new DatabaseReader(dbPath.toFile(), dataStore, clock);
+            DatabaseReader reader = new DatabaseReader(dbPath.toFile(), dataStore.getEntries(), clock);
             reader.readDatabase();
         } catch (IOException e) {
             throw new RuntimeException("Failed to load database file: " + dbPath, e);
@@ -145,14 +144,8 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
         connectionManager.start(connectionsExecutorService);
 
         // Background cleanup of expired keys
-        cleanupExecutorService.scheduleAtFixedRate(() -> {
-            for (String key : dataStore.keySet()) {
-                StoredData data = dataStore.get(key);
-                if (data != null && isExpired(data)) {
-                    delete(key);
-                }
-            }
-        }, 10, 30, TimeUnit.SECONDS);
+        cleanupExecutorService.scheduleAtFixedRate(
+                dataStore::cleanupExpiredKeys, 10, 30, TimeUnit.SECONDS);
 
     }
 
@@ -220,180 +213,30 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
         return options.getConfigValue(configName);
     }
 
-    // Checks if a key exists in the data store
-    public boolean containsKey(String key) {
-        return dataStore.containsKey(key);
-    }
+    // Delegate data operations to DataStore
 
-    // Checks if a key exists and has not expired
-    public boolean containsUnexpiredKey(String key) {
-        StoredData storedData = dataStore.get(key);
-        return storedData != null && !isExpired(storedData);
-    }
+    public boolean containsKey(String key) { return dataStore.containsKey(key); }
+    public boolean containsUnexpiredKey(String key) { return dataStore.containsUnexpiredKey(key); }
+    public DataEntry get(String key) { return dataStore.get(key); }
+    public DataEntry set(String key, DataEntry entry) { return dataStore.set(key, entry); }
+    public void delete(String key) { dataStore.delete(key); }
+    public Collection<String> getKeys() { return dataStore.getKeys(); }
+    public RespSimpleStringValue getType(String key) { return dataStore.getType(key); }
+    public boolean isExpired(DataEntry entry) { return dataStore.isExpired(entry); }
+    public long getCurrentTime() { return dataStore.getCurrentTime(); }
 
-    // Retrieves the stored data for a key
-    public StoredData get(String key) {
-
-        lruStore.logKeyAccess(key);
-        return dataStore.get(key);
-    }
-
-    // Stores data for a key, returning any previous value
-    public StoredData set(String key, StoredData storedData) {
-        evictIfNeeded(key);
-        lruStore.logKeyAccess(key);
-        return dataStore.put(key, storedData);
-    }
-
-    // Evicts the LRU key if at capacity and the key is new
-    private void evictIfNeeded(String key) {
-        int maxKeys = options.getMaxKeys();
-        if (maxKeys > 0 && !dataStore.containsKey(key) && lruStore.size() >= maxKeys) {
-            String evictedKey = lruStore.evictLRUKey();
-            if (evictedKey != null) {
-                dataStore.remove(evictedKey);
-                log.info("LRU evicted key: {}", evictedKey);
-            }
-        }
-    }
-
-    // Removes a key from the data store
-    public void delete(String key) {
-        dataStore.remove(key);
-        lruStore.remove(key);
-    }
-
-    // Returns all keys in the data store
-    public Collection<String> getKeys() {
-        return dataStore.keySet();
-    }
-
-    // Returns the type of value stored at a key (string, list, stream, etc.)
-    public RespSimpleStringValue getType(String key) {
-        if (dataStore.containsKey(key)) {
-            return dataStore.get(key).getType().getTypeResponse();
-        }
-        return new RespSimpleStringValue("none");
-    }
-
-    // Checks if the stored data has passed its expiration time
-    public boolean isExpired(StoredData storedData) {
-        return storedData.isExpired(clock.millis());
-    }
-
-    // Returns the current time in milliseconds
-    public long getCurrentTime() {
-        return clock.millis();
-    }
-
-    // Appends an entry to a stream, creating the stream if it doesn't exist
     public StreamId xadd(String key, String itemId, RespValue[] itemMap)
-            throws IllegalStreamItemIdException {
-        evictIfNeeded(key);
-        lruStore.logKeyAccess(key);
-        StoredData storedData = getOrCreateStreamData(key);
-        return storedData.getStreamValue().add(itemId, clock, itemMap);
-    }
-
-    // Returns entries from a stream within the given ID range
+            throws IllegalStreamItemIdException { return dataStore.xadd(key, itemId, itemMap); }
     public List<StreamValue> xrange(String key, String start, String end)
-            throws IllegalStreamItemIdException {
-        lruStore.logKeyAccess(key);
-        StoredData storedData = getOrCreateStreamData(key);
-        return storedData.getStreamValue().queryRange(start, end);
-    }
-
-    // Reads next entries from multiple streams after the given start IDs
+            throws IllegalStreamItemIdException { return dataStore.xrange(key, start, end); }
     public List<List<StreamValue>> xread(List<String> keys, List<String> startValues)
-            throws IllegalStreamItemIdException {
-        List<List<StreamValue>> results = new ArrayList<>();
-        for (int i = 0; i < keys.size(); i++) {
-            lruStore.logKeyAccess(keys.get(i));
-            StreamData stream = getOrCreateStreamData(keys.get(i)).getStreamValue();
-            StreamId startId = stream.getStreamIdForRead(startValues.get(i));
-            results.add(stream.readNextValues(StreamData.MAX_READ_COUNT, startId));
-        }
-        return results;
-    }
+            throws IllegalStreamItemIdException { return dataStore.xread(keys, startValues); }
 
-    // Gets or creates a stream data structure for the given key
-    private StoredData getOrCreateStreamData(String key) {
-        return dataStore.computeIfAbsent(key,
-                k -> new StoredData(new StreamData(k), clock.millis(), null));
-    }
-
-    private StoredData getOrCreateListData(String key) {
-        return dataStore.computeIfAbsent(
-                key,
-                k -> new StoredData(new LinkedList<String>(), clock.millis(), null));
-    }
-
-
-    // LIST specific methods
-    public long lpush(String key, String value) {
-        evictIfNeeded(key);
-        lruStore.logKeyAccess(key);
-        List<String> list = getOrCreateListData(key).getListValue();
-        list.addFirst(value);
-        return list.size();
-    }
-
-    public long rpush(String key, String value) {
-        evictIfNeeded(key);
-        lruStore.logKeyAccess(key);
-        List<String> list = getOrCreateListData(key).getListValue();
-        list.addLast(value);
-        return list.size();
-    }
-
-    public String lpop(String key) {
-        StoredData storedData = dataStore.get(key);
-        if (storedData == null) return null;
-
-        lruStore.logKeyAccess(key);
-        LinkedList<String> list = storedData.getListValue();
-        if (list.isEmpty()) return null;
-
-        String value = list.removeFirst();
-        if (list.isEmpty()) delete(key);
-        return value;
-    }
-
-    public String rpop(String key) {
-        StoredData storedData = dataStore.get(key);
-        if (storedData == null) return null;
-
-        lruStore.logKeyAccess(key);
-        LinkedList<String> list = storedData.getListValue();
-        if (list.isEmpty()) return null;
-
-        String value = list.removeLast();
-        if (list.isEmpty()) delete(key);
-        return value;
-    }
-
-    public List<String> lrange(String key, int start, int end) {
-        StoredData storedData = dataStore.get(key);
-        if (storedData == null) return List.of();
-        lruStore.logKeyAccess(key);
-
-        List<String> list = storedData.getListValue();
-        int size = list.size();
-        if (size == 0) return List.of();
-
-        // Convert negative indices
-        if (start < 0) start = size + start;
-        if (end < 0) end = size + end;
-
-        // Clamp to bounds
-        start = Math.max(0, start);
-        end = Math.min(size - 1, end);
-
-        if (start > end) return List.of();
-
-        // subList end is exclusive, Redis end is inclusive
-        return new ArrayList<>(list.subList(start, end + 1));
-    }
+    public long lpush(String key, String value) { return dataStore.lpush(key, value); }
+    public long rpush(String key, String value) { return dataStore.rpush(key, value); }
+    public String lpop(String key) { return dataStore.lpop(key); }
+    public String rpop(String key) { return dataStore.rpop(key); }
+    public List<String> lrange(String key, int start, int end) { return dataStore.lrange(key, start, end); }
     // Subclasses implement this to handle command execution and replication
     public abstract void execute(Command command, ClientConnection conn) throws IOException;
 
@@ -493,7 +336,7 @@ public abstract class CentralRepository implements ReplicationServiceInfoProvide
 
     // Sends the RDB snapshot during full resynchronization
     public byte[] psyncRdb(Map<String, RespValue> optionsMap) {
-        throw new UnsupportedOperationException("No psync RDB implementation for this repository");
+        throw new UnsupportedOperationException("psync RDB not supported for this role");
     }
 
     // Begins a new transaction for the current connection

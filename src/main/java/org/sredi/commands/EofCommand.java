@@ -1,5 +1,5 @@
 package org.sredi.commands;
-import org.sredi.storage.CentralRepository;
+import org.sredi.storage.Orchestrator;
 
 public class EofCommand extends Command {
 
@@ -8,7 +8,7 @@ public class EofCommand extends Command {
     }
 
     @Override
-    public byte[] execute(CentralRepository service) {
+    public byte[] execute(Orchestrator service) {
         return null;
     }
 

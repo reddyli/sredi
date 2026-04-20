@@ -1,6 +1,6 @@
 package org.sredi.commands;
 
-import org.sredi.storage.CentralRepository;
+import org.sredi.storage.Orchestrator;
 import org.sredi.resp.RespArrayValue;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespValue;
@@ -12,7 +12,7 @@ public class PingCommand extends Command {
     }
 
     @Override
-    public byte[] execute(CentralRepository service) {
+    public byte[] execute(Orchestrator service) {
         return "+PONG\r\n".getBytes();
     }
 

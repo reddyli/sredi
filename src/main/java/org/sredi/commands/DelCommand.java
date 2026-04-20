@@ -3,7 +3,7 @@ package org.sredi.commands;
 import org.sredi.resp.RespArrayValue;
 import org.sredi.resp.RespInteger;
 import org.sredi.resp.RespValue;
-import org.sredi.storage.CentralRepository;
+import org.sredi.storage.Orchestrator;
 
 import java.util.Map;
 
@@ -25,7 +25,7 @@ public class DelCommand extends Command{
     }
 
     @Override
-    public byte[] execute(CentralRepository service) {
+    public byte[] execute(Orchestrator service) {
         int deletedKeysCount = 0;
         for(RespValue key : keys) {
             if(service.containsKey(key.getValueAsString())) {

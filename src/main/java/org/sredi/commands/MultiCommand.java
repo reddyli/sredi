@@ -1,6 +1,6 @@
 package org.sredi.commands;
 
-import org.sredi.storage.CentralRepository;
+import org.sredi.storage.Orchestrator;
 import org.sredi.resp.RespSimpleStringValue;
 import org.sredi.resp.RespConstants;
 
@@ -11,7 +11,7 @@ public class MultiCommand extends Command {
     }
 
     @Override
-    public byte[] execute(CentralRepository service) {
+    public byte[] execute(Orchestrator service) {
         service.startTransaction();
         return new RespSimpleStringValue("OK").asResponse();
     }

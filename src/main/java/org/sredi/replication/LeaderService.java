@@ -18,14 +18,14 @@ import org.sredi.resp.RespConstants;
 import org.sredi.resp.RespSimpleStringValue;
 import org.sredi.resp.RespValue;
 import org.sredi.setup.SetupOptions;
-import org.sredi.storage.CentralRepository;
+import org.sredi.storage.Orchestrator;
 
 /**
- * Leader (master) implementation of CentralRepository.
+ * Leader (master) implementation of Orchestrator.
  * Handles command execution and propagates write commands to all connected followers.
  * Manages replication state and responds to PSYNC requests from new followers.
  */
-public class LeaderService extends CentralRepository {
+public class LeaderService extends Orchestrator {
 
     // Empty RDB snapshot sent to followers during FULLRESYNC (base64 encoded)
     private static final String EMPTY_RDB_BASE64 =

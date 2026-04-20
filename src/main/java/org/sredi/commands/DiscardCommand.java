@@ -1,6 +1,6 @@
 package org.sredi.commands;
 
-import org.sredi.storage.CentralRepository;
+import org.sredi.storage.Orchestrator;
 import org.sredi.resp.RespSimpleStringValue;
 import org.sredi.resp.RespSimpleErrorValue;
 
@@ -11,7 +11,7 @@ public class DiscardCommand extends Command {
     }
 
     @Override
-    public byte[] execute(CentralRepository service) {
+    public byte[] execute(Orchestrator service) {
         try {
             service.discardTransaction();
             return new RespSimpleStringValue("OK").asResponse();

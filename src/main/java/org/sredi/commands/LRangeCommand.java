@@ -6,7 +6,7 @@ import java.util.Map;
 import org.sredi.resp.RespArrayValue;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespValue;
-import org.sredi.storage.CentralRepository;
+import org.sredi.storage.Orchestrator;
 
 public class LRangeCommand extends Command {
 
@@ -33,7 +33,7 @@ public class LRangeCommand extends Command {
     }
 
     @Override
-    public byte[] execute(CentralRepository service) {
+    public byte[] execute(Orchestrator service) {
         List<String> values = service.lrange(key, start, stop);
         RespValue[] respValues = values.stream()
                 .map(v -> new RespBulkString(v.getBytes()))

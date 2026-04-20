@@ -2,7 +2,7 @@ package org.sredi.commands;
 
 import java.util.Map;
 
-import org.sredi.storage.CentralRepository;
+import org.sredi.storage.Orchestrator;
 import org.sredi.resp.RespArrayValue;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespValue;
@@ -79,7 +79,7 @@ public class ConfigCommand extends Command {
     }
 
     @Override
-    public byte[] execute(CentralRepository service) {
+    public byte[] execute(Orchestrator service) {
         switch (action) {
         case GET:
             return new RespArrayValue(new RespValue[] { new RespBulkString(key.getBytes()),

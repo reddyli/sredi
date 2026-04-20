@@ -16,14 +16,14 @@ import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespConstants;
 import org.sredi.resp.RespSimpleStringValue;
 import org.sredi.resp.RespValue;
-import org.sredi.storage.CentralRepository;
-import org.sredi.storage.StoredData;
+import org.sredi.storage.Orchestrator;
+import org.sredi.storage.DataEntry;
 
 @ExtendWith(MockitoExtension.class)
 class CommandTest {
 
     @Mock
-    private CentralRepository mockRepository;
+    private Orchestrator mockOrchestrator;
 
     // Helper to create RespBulkString from string
     private RespBulkString bulkString(String value) {
@@ -36,15 +36,15 @@ class CommandTest {
         @Test
         void getExistingKey() {
             // Setup: key "mykey" exists with value "myvalue"
-            when(mockRepository.containsKey("mykey")).thenReturn(true);
-            when(mockRepository.get("mykey")).thenReturn(
-                new StoredData("myvalue".getBytes(), 0L, null)
+            when(mockOrchestrator.containsKey("mykey")).thenReturn(true);
+            when(mockOrchestrator.get("mykey")).thenReturn(
+                new DataEntry("myvalue".getBytes(), 0L, null)
             );
-            when(mockRepository.isExpired(any())).thenReturn(false);
+            when(mockOrchestrator.isExpired(any())).thenReturn(false);
 
             // Execute
             GetCommand cmd = new GetCommand(bulkString("mykey"));
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             // Verify: should return the value as bulk string
             String response = new String(result);
@@ -54,11 +54,11 @@ class CommandTest {
         @Test
         void getNonExistentKey() {
             // Setup: key doesn't exist
-            when(mockRepository.containsKey("nokey")).thenReturn(false);
+            when(mockOrchestrator.containsKey("nokey")).thenReturn(false);
 
             // Execute
             GetCommand cmd = new GetCommand(bulkString("nokey"));
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             // Verify: should return NULL
             assertArrayEquals(RespConstants.NULL, result);
@@ -67,18 +67,18 @@ class CommandTest {
         @Test
         void getExpiredKey() {
             // Setup: key exists but is expired
-            StoredData expiredData = new StoredData("oldvalue".getBytes(), 0L, 1000L);
-            when(mockRepository.containsKey("expiredkey")).thenReturn(true);
-            when(mockRepository.get("expiredkey")).thenReturn(expiredData);
-            when(mockRepository.isExpired(expiredData)).thenReturn(true);
+            DataEntry expiredData = new DataEntry("oldvalue".getBytes(), 0L, 1000L);
+            when(mockOrchestrator.containsKey("expiredkey")).thenReturn(true);
+            when(mockOrchestrator.get("expiredkey")).thenReturn(expiredData);
+            when(mockOrchestrator.isExpired(expiredData)).thenReturn(true);
 
             // Execute
             GetCommand cmd = new GetCommand(bulkString("expiredkey"));
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             // Verify: should return NULL and delete the key
             assertArrayEquals(RespConstants.NULL, result);
-            verify(mockRepository).delete("expiredkey");
+            verify(mockOrchestrator).delete("expiredkey");
         }
     }
 
@@ -88,22 +88,22 @@ class CommandTest {
         @Test
         void setBasic() {
             // Setup
-            when(mockRepository.getCurrentTime()).thenReturn(1000L);
+            when(mockOrchestrator.getCurrentTime()).thenReturn(1000L);
 
             // Execute
             SetCommand cmd = new SetCommand(bulkString("key1"), bulkString("value1"));
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             // Verify: should return OK and call set()
             assertArrayEquals(RespConstants.OK, result);
-            verify(mockRepository).set(eq("key1"), any(StoredData.class));
+            verify(mockOrchestrator).set(eq("key1"), any(DataEntry.class));
         }
 
         @Test
         void setWithNxWhenKeyDoesNotExist() {
             // Setup: key doesn't exist
-            when(mockRepository.getCurrentTime()).thenReturn(1000L);
-            when(mockRepository.containsUnexpiredKey("newkey")).thenReturn(false);
+            when(mockOrchestrator.getCurrentTime()).thenReturn(1000L);
+            when(mockOrchestrator.containsUnexpiredKey("newkey")).thenReturn(false);
 
             // Execute: SET newkey value NX
             SetCommand cmd = new SetCommand();
@@ -113,17 +113,17 @@ class CommandTest {
                 bulkString("value"),
                 bulkString("nx")
             });
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             // Verify: should succeed
             assertArrayEquals(RespConstants.OK, result);
-            verify(mockRepository).set(eq("newkey"), any(StoredData.class));
+            verify(mockOrchestrator).set(eq("newkey"), any(DataEntry.class));
         }
 
         @Test
         void setWithNxWhenKeyExists() {
             // Setup: key already exists
-            when(mockRepository.containsUnexpiredKey("existingkey")).thenReturn(true);
+            when(mockOrchestrator.containsUnexpiredKey("existingkey")).thenReturn(true);
 
             // Execute: SET existingkey value NX
             SetCommand cmd = new SetCommand();
@@ -133,11 +133,11 @@ class CommandTest {
                 bulkString("value"),
                 bulkString("nx")
             });
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             // Verify: should return NULL (key not set)
             assertArrayEquals(RespConstants.NULL, result);
-            verify(mockRepository, never()).set(anyString(), any(StoredData.class));
+            verify(mockOrchestrator, never()).set(anyString(), any(DataEntry.class));
         }
     }
 
@@ -147,11 +147,11 @@ class CommandTest {
         @Test
         void incrExistingNumericKey() {
             // Setup: key exists with value "10"
-            when(mockRepository.containsKey("counter")).thenReturn(true);
-            when(mockRepository.get("counter")).thenReturn(
-                new StoredData("10".getBytes(), 0L, null)
+            when(mockOrchestrator.containsKey("counter")).thenReturn(true);
+            when(mockOrchestrator.get("counter")).thenReturn(
+                new DataEntry("10".getBytes(), 0L, null)
             );
-            when(mockRepository.getCurrentTime()).thenReturn(1000L);
+            when(mockOrchestrator.getCurrentTime()).thenReturn(1000L);
 
             // Execute
             IncrCommand cmd = new IncrCommand();
@@ -159,7 +159,7 @@ class CommandTest {
                 bulkString("INCR"),
                 bulkString("counter")
             });
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             // Verify: should return 11
             String response = new String(result);
@@ -169,8 +169,8 @@ class CommandTest {
         @Test
         void incrNonExistentKey() {
             // Setup: key doesn't exist
-            when(mockRepository.containsKey("newcounter")).thenReturn(false);
-            when(mockRepository.getCurrentTime()).thenReturn(1000L);
+            when(mockOrchestrator.containsKey("newcounter")).thenReturn(false);
+            when(mockOrchestrator.getCurrentTime()).thenReturn(1000L);
 
             // Execute
             IncrCommand cmd = new IncrCommand();
@@ -178,12 +178,12 @@ class CommandTest {
                 bulkString("INCR"),
                 bulkString("newcounter")
             });
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             // Verify: should return 0 (creates key with value 0)
             String response = new String(result);
             assertTrue(response.contains("0"));
-            verify(mockRepository).set(eq("newcounter"), any(StoredData.class));
+            verify(mockOrchestrator).set(eq("newcounter"), any(DataEntry.class));
         }
     }
 
@@ -192,12 +192,12 @@ class CommandTest {
 
         @Test
         void keysReturnsAllKeys() {
-            // Setup: repository has 3 keys
-            when(mockRepository.getKeys()).thenReturn(Set.of("key1", "key2", "key3"));
+            // Setup: orchestrator has 3 keys
+            when(mockOrchestrator.getKeys()).thenReturn(Set.of("key1", "key2", "key3"));
 
             // Execute
             KeysCommand cmd = new KeysCommand("*");
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             // Verify: response should contain all keys
             String response = new String(result);
@@ -208,12 +208,12 @@ class CommandTest {
 
         @Test
         void keysReturnsEmptyArray() {
-            // Setup: repository has no keys
-            when(mockRepository.getKeys()).thenReturn(Set.of());
+            // Setup: orchestrator has no keys
+            when(mockOrchestrator.getKeys()).thenReturn(Set.of());
 
             // Execute
             KeysCommand cmd = new KeysCommand("*");
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             // Verify: should return empty array "*0\r\n"
             assertEquals("*0\r\n", new String(result));
@@ -226,13 +226,13 @@ class CommandTest {
         @Test
         void typeReturnsStringForStringKey() {
             // Setup
-            when(mockRepository.getType("mykey")).thenReturn(
+            when(mockOrchestrator.getType("mykey")).thenReturn(
                 new RespSimpleStringValue("string")
             );
 
             // Execute
             TypeCommand cmd = new TypeCommand(bulkString("mykey"));
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             // Verify
             assertEquals("+string\r\n", new String(result));
@@ -241,13 +241,13 @@ class CommandTest {
         @Test
         void typeReturnsNoneForNonExistentKey() {
             // Setup
-            when(mockRepository.getType("nokey")).thenReturn(
+            when(mockOrchestrator.getType("nokey")).thenReturn(
                 new RespSimpleStringValue("none")
             );
 
             // Execute
             TypeCommand cmd = new TypeCommand(bulkString("nokey"));
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             // Verify
             assertEquals("+none\r\n", new String(result));
@@ -259,33 +259,33 @@ class CommandTest {
 
         @Test
         void lpushReturnsListSize() {
-            when(mockRepository.lpush("mylist", "hello")).thenReturn(1L);
+            when(mockOrchestrator.lpush("mylist", "hello")).thenReturn(1L);
 
             LPushCommand cmd = new LPushCommand();
             cmd.setArgs(new RespValue[] { bulkString("LPUSH"), bulkString("mylist"), bulkString("hello") });
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             assertEquals(":1\r\n", new String(result));
         }
 
         @Test
         void rpushReturnsListSize() {
-            when(mockRepository.rpush("mylist", "world")).thenReturn(2L);
+            when(mockOrchestrator.rpush("mylist", "world")).thenReturn(2L);
 
             RPushCommand cmd = new RPushCommand();
             cmd.setArgs(new RespValue[] { bulkString("RPUSH"), bulkString("mylist"), bulkString("world") });
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             assertEquals(":2\r\n", new String(result));
         }
 
         @Test
         void lpopReturnsValue() {
-            when(mockRepository.lpop("mylist")).thenReturn("hello");
+            when(mockOrchestrator.lpop("mylist")).thenReturn("hello");
 
             LPopCommand cmd = new LPopCommand();
             cmd.setArgs(new RespValue[] { bulkString("LPOP"), bulkString("mylist") });
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             String response = new String(result);
             assertTrue(response.contains("hello"));
@@ -293,22 +293,22 @@ class CommandTest {
 
         @Test
         void lpopReturnsNullForMissingKey() {
-            when(mockRepository.lpop("nokey")).thenReturn(null);
+            when(mockOrchestrator.lpop("nokey")).thenReturn(null);
 
             LPopCommand cmd = new LPopCommand();
             cmd.setArgs(new RespValue[] { bulkString("LPOP"), bulkString("nokey") });
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             assertArrayEquals(RespConstants.NULL, result);
         }
 
         @Test
         void rpopReturnsValue() {
-            when(mockRepository.rpop("mylist")).thenReturn("world");
+            when(mockOrchestrator.rpop("mylist")).thenReturn("world");
 
             RPopCommand cmd = new RPopCommand();
             cmd.setArgs(new RespValue[] { bulkString("RPOP"), bulkString("mylist") });
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             String response = new String(result);
             assertTrue(response.contains("world"));
@@ -316,24 +316,24 @@ class CommandTest {
 
         @Test
         void rpopReturnsNullForMissingKey() {
-            when(mockRepository.rpop("nokey")).thenReturn(null);
+            when(mockOrchestrator.rpop("nokey")).thenReturn(null);
 
             RPopCommand cmd = new RPopCommand();
             cmd.setArgs(new RespValue[] { bulkString("RPOP"), bulkString("nokey") });
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             assertArrayEquals(RespConstants.NULL, result);
         }
 
         @Test
         void lrangeReturnsElements() {
-            when(mockRepository.lrange("mylist", 0, -1)).thenReturn(List.of("a", "b", "c"));
+            when(mockOrchestrator.lrange("mylist", 0, -1)).thenReturn(List.of("a", "b", "c"));
 
             LRangeCommand cmd = new LRangeCommand();
             cmd.setArgs(new RespValue[] {
                 bulkString("LRANGE"), bulkString("mylist"), bulkString("0"), bulkString("-1")
             });
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             String response = new String(result);
             assertTrue(response.startsWith("*3"));
@@ -344,13 +344,13 @@ class CommandTest {
 
         @Test
         void lrangeReturnsEmptyForMissingKey() {
-            when(mockRepository.lrange("nokey", 0, -1)).thenReturn(List.of());
+            when(mockOrchestrator.lrange("nokey", 0, -1)).thenReturn(List.of());
 
             LRangeCommand cmd = new LRangeCommand();
             cmd.setArgs(new RespValue[] {
                 bulkString("LRANGE"), bulkString("nokey"), bulkString("0"), bulkString("-1")
             });
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             assertEquals("*0\r\n", new String(result));
         }

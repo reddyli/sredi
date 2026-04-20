@@ -5,7 +5,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import org.sredi.storage.CentralRepository;
+import org.sredi.storage.Orchestrator;
 import org.sredi.resp.RespArrayValue;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespSimpleErrorValue;
@@ -38,7 +38,7 @@ public class XaddCommand extends Command {
     }
 
     @Override
-    public byte[] execute(CentralRepository service) {
+    public byte[] execute(Orchestrator service) {
         try {
             StreamId streamId = service.xadd(key, itemId, itemMap);
             return new RespBulkString(streamId.getId().getBytes()).asResponse();

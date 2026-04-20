@@ -3,7 +3,7 @@ package org.sredi.commands;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.sredi.storage.CentralRepository;
+import org.sredi.storage.Orchestrator;
 import org.sredi.resp.RespArrayValue;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespInteger;
@@ -37,7 +37,7 @@ public class PsyncCommand extends Command {
     }
 
     @Override
-    public byte[] execute(CentralRepository service) {
+    public byte[] execute(Orchestrator service) {
         byte[] psync = service.psync(optionsMap);
         byte[] rdb = service.psyncRdb(optionsMap);
         byte[] response = new byte[psync.length + rdb.length];

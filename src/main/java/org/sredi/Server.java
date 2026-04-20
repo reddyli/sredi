@@ -3,7 +3,7 @@ package org.sredi;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sredi.setup.SetupOptions;
-import org.sredi.storage.CentralRepository;
+import org.sredi.storage.Orchestrator;
 
 import java.io.IOException;
 import java.time.Clock;
@@ -21,10 +21,10 @@ public class Server {
     }
 
     public void run() {
-        CentralRepository repository = CentralRepository.newInstance(options, Clock.systemUTC());
+        Orchestrator orchestrator = Orchestrator.newInstance(options, Clock.systemUTC());
         try {
-            repository.start();
-            repository.runCommandLoop();
+            orchestrator.start();
+            orchestrator.runCommandLoop();
             log.info("Event loop terminated");
         } catch (IOException e) {
             log.error("IOException: {}", e.getMessage());
@@ -32,7 +32,7 @@ public class Server {
             Thread.currentThread().interrupt();
             log.error("InterruptedException: {}", e.getMessage());
         } finally {
-            repository.shutdown();
+            orchestrator.shutdown();
         }
     }
 }

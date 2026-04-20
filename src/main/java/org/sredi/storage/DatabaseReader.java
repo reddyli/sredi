@@ -17,10 +17,10 @@ public class DatabaseReader {
     private static final Logger log = LoggerFactory.getLogger(DatabaseReader.class);
 
     private final File dbFile;
-    private final Map<String, StoredData> dataStoreMap;
+    private final Map<String, DataEntry> dataStoreMap;
     private final Clock clock;
 
-    public DatabaseReader(File dbFile, Map<String, StoredData> dataStoreMap, Clock clock) {
+    public DatabaseReader(File dbFile, Map<String, DataEntry> dataStoreMap, Clock clock) {
         this.dbFile = dbFile;
         this.dataStoreMap = dataStoreMap;
         this.clock = clock;

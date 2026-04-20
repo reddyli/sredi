@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import org.sredi.storage.CentralRepository;
+import org.sredi.storage.Orchestrator;
 import org.sredi.resp.RespArrayValue;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespSimpleErrorValue;
@@ -35,7 +35,7 @@ public class XreadCommand extends Command {
     }
 
     @Override
-    public byte[] execute(CentralRepository service) {
+    public byte[] execute(Orchestrator service) {
         try {
             List<List<StreamValue>> result = service.xread(keys, startValues);
             List<List<RespValue>> resultResp = new ArrayList<>();

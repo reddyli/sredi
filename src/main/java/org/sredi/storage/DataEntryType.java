@@ -2,7 +2,7 @@ package org.sredi.storage;
 
 import org.sredi.resp.RespSimpleStringValue;
 
-public enum StoredDataType {
+public enum DataEntryType {
     STRING, STREAM, LIST;
 
     public RespSimpleStringValue getTypeResponse() {

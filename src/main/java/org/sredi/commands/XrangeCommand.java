@@ -3,7 +3,7 @@ package org.sredi.commands;
 import java.util.List;
 import java.util.Map;
 
-import org.sredi.storage.CentralRepository;
+import org.sredi.storage.Orchestrator;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespSimpleErrorValue;
 import org.sredi.resp.RespValue;
@@ -35,7 +35,7 @@ public class XrangeCommand extends Command {
     }
 
     @Override
-    public byte[] execute(CentralRepository service) {
+    public byte[] execute(Orchestrator service) {
         try {
             List<StreamValue> result = service.xrange(key, start, end);
             RespValue[] resultArray = result.stream().map(StreamValue::asRespArrayValue)

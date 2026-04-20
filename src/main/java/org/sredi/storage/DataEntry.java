@@ -9,36 +9,36 @@ import lombok.Getter;
 import org.sredi.streams.StreamData;
 
 @Getter
-public class StoredData {
+public class DataEntry {
     private final byte[] value;
     private final StreamData streamValue;
     private final LinkedList<String> listValue;
-    private final StoredDataType type;
+    private final DataEntryType type;
     private final long storedAt;
     private final Long ttlMillis;
 
-    public StoredData(List<String> listValue , long storedAt, Long ttlMillis) {
+    public DataEntry(List<String> listValue , long storedAt, Long ttlMillis) {
         this.listValue = new LinkedList<>(listValue);
         this.storedAt = storedAt;
         this.ttlMillis = ttlMillis;
         this.streamValue = null;
-        this.type = StoredDataType.LIST;
+        this.type = DataEntryType.LIST;
         this.value = null;
     }
 
-    public StoredData(StreamData streamValue, long storedAt, Long ttlMillis) {
+    public DataEntry(StreamData streamValue, long storedAt, Long ttlMillis) {
         this.value = null;
         this.streamValue = streamValue;
-        this.type = StoredDataType.STREAM;
+        this.type = DataEntryType.STREAM;
         this.storedAt = storedAt;
         this.ttlMillis = ttlMillis;
         this.listValue = null;
     }
 
-    public StoredData(byte[] value, long storedAt, Long ttlMillis) {
+    public DataEntry(byte[] value, long storedAt, Long ttlMillis) {
         this.value = value;
         streamValue = null;
-        this.type = StoredDataType.STRING;
+        this.type = DataEntryType.STRING;
         this.storedAt = storedAt;
         this.ttlMillis = ttlMillis;
         this.listValue = null;
@@ -50,7 +50,7 @@ public class StoredData {
 
     @Override
     public String toString() {
-        return "StoredData [value="
+        return "DataEntry [value="
                 + (value != null ? new String(value) : streamValue)
                 + ", type=" + type.getTypeResponse().getValueAsString()
                 + ", storedAt=" + storedAt
@@ -70,9 +70,9 @@ public class StoredData {
     public boolean equals(Object obj) {
         if (this == obj)
             return true;
-        if (!(obj instanceof StoredData))
+        if (!(obj instanceof DataEntry))
             return false;
-        StoredData other = (StoredData) obj;
+        DataEntry other = (DataEntry) obj;
         return Arrays.equals(value, other.value) && storedAt == other.storedAt
                 && Objects.equals(ttlMillis, other.ttlMillis);
     }

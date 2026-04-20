@@ -17,13 +17,13 @@ import org.sredi.io.BufferedInputLineReader;
 import org.sredi.resp.RespValue;
 import org.sredi.resp.RespValueParser;
 import org.sredi.setup.SetupOptions;
-import org.sredi.storage.CentralRepository;
+import org.sredi.storage.Orchestrator;
 
 class IntegrationTest {
 
     private RespValueParser parser;
     private CommandConstructor commandConstructor;
-    private TestableRepository repository;
+    private TestableOrchestrator orchestrator;
     private Clock fixedClock;
 
     @BeforeEach
@@ -31,7 +31,7 @@ class IntegrationTest {
         parser = new RespValueParser();
         commandConstructor = new CommandConstructor();
         fixedClock = Clock.fixed(Instant.ofEpochMilli(1000000L), ZoneId.of("UTC"));
-        repository = new TestableRepository(fixedClock);
+        orchestrator = new TestableOrchestrator(fixedClock);
     }
 
     // Helper to parse RESP input
@@ -47,7 +47,7 @@ class IntegrationTest {
         RespValue value = parseResp(respInput);
         Command command = commandConstructor.newCommandFromValue(value);
         assertNotNull(command, "Command should not be null for input: " + respInput);
-        byte[] result = command.execute(repository);
+        byte[] result = command.execute(orchestrator);
         return new String(result, StandardCharsets.UTF_8);
     }
 
@@ -136,12 +136,12 @@ class IntegrationTest {
     }
 
     /**
-     * Minimal testable repository that doesn't start network services.
+     * Minimal testable orchestrator that doesn't start network services.
      * Extends LeaderService but skips the start() method.
      */
-    static class TestableRepository extends org.sredi.replication.LeaderService {
+    static class TestableOrchestrator extends org.sredi.replication.LeaderService {
 
-        TestableRepository(Clock clock) {
+        TestableOrchestrator(Clock clock) {
             super(createTestOptions(), clock);
         }
 

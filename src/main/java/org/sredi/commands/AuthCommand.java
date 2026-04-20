@@ -5,7 +5,7 @@ import java.util.Map;
 import org.sredi.resp.RespConstants;
 import org.sredi.resp.RespSimpleErrorValue;
 import org.sredi.resp.RespValue;
-import org.sredi.storage.CentralRepository;
+import org.sredi.storage.Orchestrator;
 
 public class AuthCommand extends Command {
 
@@ -26,7 +26,7 @@ public class AuthCommand extends Command {
     }
 
     @Override
-    public byte[] execute(CentralRepository service) {
+    public byte[] execute(Orchestrator service) {
         if (service.authenticate(password)) {
             return RespConstants.OK;
         }

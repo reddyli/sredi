@@ -3,8 +3,8 @@ package org.sredi.commands;
 import java.util.Map;
 
 import lombok.Getter;
-import org.sredi.storage.CentralRepository;
-import org.sredi.storage.StoredData;
+import org.sredi.storage.Orchestrator;
+import org.sredi.storage.DataEntry;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespConstants;
 import org.sredi.resp.RespValue;
@@ -37,9 +37,9 @@ public class GetCommand extends Command {
     }
 
     @Override
-    public byte[] execute(CentralRepository service) {
+    public byte[] execute(Orchestrator service) {
         if (service.containsKey(key.getValueAsString())) {
-            StoredData storedData = service.get(key.getValueAsString());
+            DataEntry storedData = service.get(key.getValueAsString());
             if (service.isExpired(storedData)) {
                 service.delete(key.getValueAsString());
                 return RespConstants.NULL;

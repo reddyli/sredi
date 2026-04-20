@@ -5,7 +5,7 @@ import java.util.Map;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespConstants;
 import org.sredi.resp.RespValue;
-import org.sredi.storage.CentralRepository;
+import org.sredi.storage.Orchestrator;
 
 public class RPopCommand extends Command {
 
@@ -26,7 +26,7 @@ public class RPopCommand extends Command {
     }
 
     @Override
-    public byte[] execute(CentralRepository service) {
+    public byte[] execute(Orchestrator service) {
         String value = service.rpop(key);
         if (value == null) return RespConstants.NULL;
         return new RespBulkString(value.getBytes()).asResponse();

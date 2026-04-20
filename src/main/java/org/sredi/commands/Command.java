@@ -7,7 +7,7 @@ import java.util.Set;
 import java.util.function.Function;
 
 import lombok.Getter;
-import org.sredi.storage.CentralRepository;
+import org.sredi.storage.Orchestrator;
 import org.sredi.resp.RespValue;
 
 @Getter
@@ -92,7 +92,7 @@ public abstract class Command {
         return null;
     }
 
-    public abstract byte[] execute(CentralRepository service);
+    public abstract byte[] execute(Orchestrator service);
 
     public abstract String toString();
 

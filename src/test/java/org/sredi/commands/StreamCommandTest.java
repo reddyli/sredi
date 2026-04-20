@@ -13,7 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespType;
 import org.sredi.resp.RespValue;
-import org.sredi.storage.CentralRepository;
+import org.sredi.storage.Orchestrator;
 import org.sredi.streams.IllegalStreamItemIdException;
 import org.sredi.streams.StreamId;
 import org.sredi.streams.StreamValue;
@@ -22,7 +22,7 @@ import org.sredi.streams.StreamValue;
 class StreamCommandTest {
 
     @Mock
-    private CentralRepository mockRepository;
+    private Orchestrator mockOrchestrator;
 
     // Helper to create bulk string
     private RespBulkString bulkString(String value) {
@@ -36,7 +36,7 @@ class StreamCommandTest {
         void xaddReturnsStreamId() throws IllegalStreamItemIdException {
             // Arrange
             StreamId expectedId = new StreamId(1000L, 0);
-            when(mockRepository.xadd(eq("mystream"), eq("1000-0"), any(RespValue[].class)))
+            when(mockOrchestrator.xadd(eq("mystream"), eq("1000-0"), any(RespValue[].class)))
                 .thenReturn(expectedId);
 
             // Act
@@ -48,18 +48,18 @@ class StreamCommandTest {
                 bulkString("field1"),
                 bulkString("value1")
             });
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             // Assert - result should be bulk string "1000-0"
             String resultStr = new String(result);
             assertTrue(resultStr.contains("1000-0"));
-            verify(mockRepository).xadd(eq("mystream"), eq("1000-0"), any(RespValue[].class));
+            verify(mockOrchestrator).xadd(eq("mystream"), eq("1000-0"), any(RespValue[].class));
         }
 
         @Test
         void xaddWithInvalidIdReturnsError() throws IllegalStreamItemIdException {
             // Arrange
-            when(mockRepository.xadd(eq("mystream"), eq("invalid"), any(RespValue[].class)))
+            when(mockOrchestrator.xadd(eq("mystream"), eq("invalid"), any(RespValue[].class)))
                 .thenThrow(new IllegalStreamItemIdException("ERR: bad id format"));
 
             // Act
@@ -71,7 +71,7 @@ class StreamCommandTest {
                 bulkString("field1"),
                 bulkString("value1")
             });
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             // Assert - result should be error
             String resultStr = new String(result);
@@ -93,7 +93,7 @@ class StreamCommandTest {
                 new StreamValue(id1, values1),
                 new StreamValue(id2, values2)
             );
-            when(mockRepository.xrange("mystream", "-", "+")).thenReturn(entries);
+            when(mockOrchestrator.xrange("mystream", "-", "+")).thenReturn(entries);
 
             // Act
             XrangeCommand cmd = new XrangeCommand();
@@ -103,18 +103,18 @@ class StreamCommandTest {
                 bulkString("-"),
                 bulkString("+")
             });
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             // Assert - result should be array
             String resultStr = new String(result);
             assertTrue(resultStr.startsWith("*")); // Array response
-            verify(mockRepository).xrange("mystream", "-", "+");
+            verify(mockOrchestrator).xrange("mystream", "-", "+");
         }
 
         @Test
         void xrangeReturnsEmptyForNoMatches() throws IllegalStreamItemIdException {
             // Arrange
-            when(mockRepository.xrange("mystream", "9999", "9999")).thenReturn(List.of());
+            when(mockOrchestrator.xrange("mystream", "9999", "9999")).thenReturn(List.of());
 
             // Act
             XrangeCommand cmd = new XrangeCommand();
@@ -124,7 +124,7 @@ class StreamCommandTest {
                 bulkString("9999"),
                 bulkString("9999")
             });
-            byte[] result = cmd.execute(mockRepository);
+            byte[] result = cmd.execute(mockOrchestrator);
 
             // Assert - empty array
             String resultStr = new String(result);
@@ -143,7 +143,7 @@ class StreamCommandTest {
             List<List<StreamValue>> result = List.of(
                 List.of(new StreamValue(id, values))
             );
-            when(mockRepository.xread(List.of("mystream"), List.of("0"))).thenReturn(result);
+            when(mockOrchestrator.xread(List.of("mystream"), List.of("0"))).thenReturn(result);
 
             // Act
             XreadCommand cmd = new XreadCommand();
@@ -153,12 +153,12 @@ class StreamCommandTest {
                 bulkString("mystream"),
                 bulkString("0")
             });
-            byte[] cmdResult = cmd.execute(mockRepository);
+            byte[] cmdResult = cmd.execute(mockOrchestrator);
 
             // Assert
             String resultStr = new String(cmdResult);
             assertTrue(resultStr.startsWith("*")); // Array response
-            verify(mockRepository).xread(List.of("mystream"), List.of("0"));
+            verify(mockOrchestrator).xread(List.of("mystream"), List.of("0"));
         }
     }
 }

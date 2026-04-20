@@ -32,10 +32,10 @@ A High Performance, distributed in-memory storage system written in Java.
 ### Upcoming
 | Feature | Description |
 |---------|-------------|
-| Pipelining | Batch command processing |
 | Pub/Sub | SUBSCRIBE, PUBLISH messaging |
 | Backpressure | Flow control when followers lag |
 | Leader Election | Bully algorithm |
+| Consistent Hashing | Key sharding across multiple nodes |
 
 ## Getting Started
 
