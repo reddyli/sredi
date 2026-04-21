@@ -26,6 +26,7 @@ public class SetupOptions {
     private int maxRps = -1; // -1 means no limit
     private boolean parallel = false;
     private int parallelThreads = Runtime.getRuntime().availableProcessors();
+    private int maxReplBacklog = 25;
 
     public boolean parseArgs(String[] args) {
         Options options = new Options();
@@ -90,6 +91,12 @@ public class SetupOptions {
                 .desc("Number of parallel worker threads")
                 .build());
 
+        options.addOption(Option.builder()
+                .longOpt("max-repl-backlog")
+                .hasArg(true)
+                .desc("Maximum replication backlog queue size per follower")
+                .build());
+
         CommandLineParser parser = new DefaultParser();
         try {
             CommandLine cmd = parser.parse(options, args);
@@ -152,6 +159,11 @@ public class SetupOptions {
             if(cmd.hasOption("parallel-threads")) {
                 parallelThreads = Integer.parseInt(cmd.getOptionValue("parallel-threads"));
                 log.info("Parallel threads specified: {}", parallelThreads);
+            }
+
+            if(cmd.hasOption("max-repl-backlog")) {
+                maxReplBacklog = Integer.parseInt(cmd.getOptionValue("max-repl-backlog"));
+                log.info("Max replication backlog specified: {}", maxReplBacklog);
             }
 
         } catch (ParseException e) {

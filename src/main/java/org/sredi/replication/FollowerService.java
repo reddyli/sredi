@@ -5,6 +5,9 @@ import java.net.Socket;
 import java.time.Clock;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import lombok.Getter;
 import org.sredi.commands.Command;
 import org.sredi.commands.ReplConfCommand;
@@ -22,6 +25,9 @@ import org.sredi.storage.Orchestrator;
  * Does not propagate commands further - it's a read replica that stays in sync with the leader.
  */
 public class FollowerService extends Orchestrator {
+    private static final Logger log = LoggerFactory.getLogger(FollowerService.class);
+    private static final int MAX_RECONNECT_DELAY_MS = 30_000;
+    private static final int INITIAL_RECONNECT_DELAY_MS = 1_000;
 
     @Getter
     private final String leaderHost;
@@ -54,6 +60,31 @@ public class FollowerService extends Orchestrator {
         leaderClientSocket.setReuseAddress(true);
         leaderConnection = new ConnectionToLeader(this);
         leaderConnection.startHandshake();
+    }
+
+    // Reconnects to leader with exponential backoff
+    public void reconnectToLeader() {
+        Thread reconnectThread = new Thread(() -> {
+            int delay = INITIAL_RECONNECT_DELAY_MS;
+            while (!isShutdownRequested()) {
+                try {
+                    log.info("Attempting to reconnect to leader in {}ms...", delay);
+                    Thread.sleep(delay);
+                    connectToLeader();
+                    log.info("Reconnected to leader successfully");
+                    return;
+                } catch (IOException e) {
+                    log.warn("Reconnection failed: {}", e.getMessage());
+                    delay = Math.min(delay * 2, MAX_RECONNECT_DELAY_MS);
+                } catch (InterruptedException e) {
+                    log.info("Reconnection interrupted");
+                    return;
+                }
+            }
+        });
+        reconnectThread.setDaemon(true);
+        reconnectThread.setName("follower-reconnect");
+        reconnectThread.start();
     }
 
     // Closes connection to leader on shutdown

@@ -1,6 +1,7 @@
 package org.sredi.replication;
 
 import java.io.IOException;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -25,13 +26,37 @@ public class ConnectionToFollower {
     @Getter
     private final ClientConnection followerConnection;
 
+    private final LinkedBlockingQueue<Command> replicationQueue;
+
     // When true, skips waiting for ACK responses (used during initial testing/setup)
     @Setter
     private volatile boolean testingDontWaitForAck = true;
 
-    public ConnectionToFollower(LeaderService service, ClientConnection followerConnection) {
+    public ConnectionToFollower(LeaderService service, ClientConnection followerConnection, int maxBacklog) {
         this.service = service;
         this.followerConnection = followerConnection;
+        this.replicationQueue = new LinkedBlockingQueue<>(maxBacklog);
+    }
+
+    void startReplicationThread() {
+        Thread replicationThread = new Thread(() -> {
+            while (!followerConnection.isClosed()) {
+                try {
+                    Command command = replicationQueue.take();
+                    followerConnection.writeFlush(command.asCommand());
+                } catch (InterruptedException e) {
+                    log.info("Replication thread interrupted for {}", followerConnection);
+                    break;
+                } catch (IOException e) {
+                    log.error("Failed to send to follower {}: {}", followerConnection, e.getMessage());
+                    break;
+                }
+            }
+            log.info("Replication thread stopped for {}", followerConnection);
+        });
+        replicationThread.setDaemon(true);
+        replicationThread.setName("repl-" + followerConnection.getConnectionString());
+        replicationThread.start();
     }
 
     // Returns the leader's current replication offset
@@ -69,21 +94,22 @@ public class ConnectionToFollower {
     }
 
     // Sends a command to this follower for replication
-    public void sendCommand(Command command) throws IOException {
+    public boolean sendCommand(Command command) throws IOException {
         if (followerConnection.isClosed()) {
             log.warn("Follower connection closed: {}", followerConnection);
-            return;
+            return true;
         }
 
         // Disable testing mode once real replication starts
         setTestingDontWaitForAck(false);
         ReplConfAckManager.INSTANCE.setTestingDontWaitForAck(false);
 
-        try {
-            followerConnection.writeFlush(command.asCommand());
-        } catch (IOException e) {
-            log.error("Failed to replicate to follower {}: {}", followerConnection, e.getMessage());
+        if(!replicationQueue.offer(command)) {
+            log.warn("Could not add command to replication queue max backlog reached: {}", command);
+            followerConnection.close();
+            return false;
         }
+        return true;
     }
 
     @Override

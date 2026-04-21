@@ -154,9 +154,10 @@ public class ConnectionToLeader {
     public void runHandshakeLoop() throws InterruptedException {
         while (!done) {
             if (leaderConnection.isClosed()) {
-                log.warn("Leader closed connection during handshake");
+                log.warn("Leader closed connection");
                 terminate();
-                continue;
+                service.reconnectToLeader();
+                return;
             }
 
             processNextHandshakeStep();

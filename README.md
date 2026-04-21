@@ -27,13 +27,13 @@ A High Performance, distributed in-memory storage system written in Java.
 | Max Connections | Semaphore-based connection limiting |
 | Rate Limiting | Per-client token bucket rate limiting |
 | Parallel Execution | Opt-in multi-threaded commands with striped read-write locks |
+| Backpressure | Bounded replication queue with follower auto-disconnect and reconnection |
 | Protocol | RESP (Redis Serialization Protocol) |
 
 ### Upcoming
 | Feature | Description |
 |---------|-------------|
 | Pub/Sub | SUBSCRIBE, PUBLISH messaging |
-| Backpressure | Flow control when followers lag |
 | Leader Election | Bully algorithm |
 | Consistent Hashing | Key sharding across multiple nodes |
 
@@ -67,6 +67,7 @@ docker run -p 6379:6379 -v /path/to/data:/data reddyli/sredi --dir /data --dbfil
 | `--maxrps` | Max requests per second per client | -1 (no limit) |
 | `--parallel` | Enable parallel command execution | false |
 | `--parallel-threads` | Number of worker threads | CPU cores |
+| `--max-repl-backlog` | Max replication queue size per follower | 25 |
 
 
 ## Performance
