@@ -3,12 +3,15 @@ package org.sredi.replication;
 import java.io.IOException;
 import java.time.Clock;
 import java.util.Base64;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import lombok.Getter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sredi.commands.Command;
 import org.sredi.commands.Command.Type;
 import org.sredi.commands.ReplConfCommand;
@@ -26,6 +29,7 @@ import org.sredi.storage.Orchestrator;
  * Manages replication state and responds to PSYNC requests from new followers.
  */
 public class LeaderService extends Orchestrator {
+    private static final Logger log = LoggerFactory.getLogger(LeaderService.class);
 
     // Empty RDB snapshot sent to followers during FULLRESYNC (base64 encoded)
     private static final String EMPTY_RDB_BASE64 =
@@ -65,8 +69,13 @@ public class LeaderService extends Orchestrator {
     // Sends write commands to all connected followers
     private void replicateToFollowers(Command command) throws IOException {
         if (command.isReplicatedCommand()) {
-            for (ConnectionToFollower follower : followers.values()) {
-                follower.sendCommand(command);
+            Iterator<Map.Entry<String, ConnectionToFollower>> iter = followers.entrySet().iterator();
+            while (iter.hasNext()) {
+                Map.Entry<String, ConnectionToFollower> entry = iter.next();
+                if (!entry.getValue().sendCommand(command)) {
+                    log.warn("Disconnecting lagging follower: {}", entry.getKey());
+                    iter.remove();
+                }
             }
         }
     }
@@ -108,6 +117,21 @@ public class LeaderService extends Orchestrator {
                 .collect(Collectors.toSet());
         return ReplConfAckManager.INSTANCE.waitForAcksFromFollowerSet(
                 numReplicas, followerConnections, clock, timeoutMillis);
+    }
+
+    @Override
+    protected void onPsyncComplete(ClientConnection conn) {
+        registerFollower(conn);
+    }
+
+    // Registers a client connection as a follower for replication
+    private void registerFollower(ClientConnection conn) {
+        String followerId = conn.getConnectionString();
+        int backlogSize = getOptions().getMaxReplBacklog();
+        ConnectionToFollower followerConn = new ConnectionToFollower(this, conn, backlogSize);
+        followerConn.startReplicationThread();
+        followers.put(followerId, followerConn);
+        log.info("Registered follower: {}", followerId);
     }
 
     // Responds to PSYNC with FULLRESYNC and replication ID

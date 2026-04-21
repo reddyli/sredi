@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.sredi.commands.Command;
 import org.sredi.commands.CommandConstructor;
 import org.sredi.commands.EofCommand;
+import org.sredi.commands.PsyncCommand;
 import org.sredi.commands.TerminateCommand;
 import org.sredi.constants.ReplicationConstants;
 import org.sredi.replication.ClientConnection;
@@ -57,6 +58,7 @@ public abstract class Orchestrator implements ReplicationServiceInfoProvider {
     // Manages all active client connections
     @Getter
     private final ConnectionManager connectionManager;
+    @Getter
     private volatile boolean shutdownRequested = false;
 
     // Server configuration and identity
@@ -286,13 +288,19 @@ public abstract class Orchestrator implements ReplicationServiceInfoProvider {
         }
     }
 
-    // Handles EOF and terminate commands after normal execution
+    // Handles post-execution actions for special commands
     private void handleSpecialCommands(ClientConnection conn, Command command) throws IOException {
         switch (command) {
             case EofCommand ignored -> conn.close();
             case TerminateCommand ignored -> terminate();
+            case PsyncCommand ignored -> onPsyncComplete(conn);
             default -> { }
         }
+    }
+
+    // Called after PSYNC completes - subclasses can override to register followers
+    protected void onPsyncComplete(ClientConnection conn) {
+        // Default no-op. LeaderService overrides to register the follower.
     }
 
     // Builds the INFO command response based on requested sections
