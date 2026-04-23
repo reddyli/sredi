@@ -45,9 +45,12 @@ public class CommandConstructor {
         case DISCARD -> new DiscardCommand();
         case PING -> new PingCommand();
         case PSYNC -> new PsyncCommand();
+        case PUBLISH -> new PublishCommand();
         case REPLCONF -> new ReplConfCommand(array.getContext().getClientConnection(), arrayStartBytesOffset);
         case SET -> new SetCommand();
+        case SUBSCRIBE -> new SubscribeCommand();
         case TYPE -> new TypeCommand();
+        case UNSUBSCRIBE -> new UnsubscribeCommand();
         case WAIT -> new WaitCommand();
         case XADD -> new XaddCommand();
         case XRANGE -> new XrangeCommand();

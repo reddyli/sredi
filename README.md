@@ -35,7 +35,7 @@ A High Performance, distributed in-memory storage system written in Java.
 |---------|-------------|
 | Pub/Sub | SUBSCRIBE, PUBLISH messaging |
 | Leader Election | Bully algorithm |
-| Consistent Hashing | Key sharding across multiple nodes |
+| Bloom Filter | Probabilistic set membership with BF.ADD/BF.EXISTS |
 
 ## Getting Started
 

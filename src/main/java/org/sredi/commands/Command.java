@@ -12,9 +12,9 @@ import org.sredi.resp.RespValue;
 
 @Getter
 public abstract class Command {
-    
+
     public enum Type {
-        AUTH, CONFIG, DEL, ECHO, GET, INCR, INFO, KEYS, LPUSH, RPUSH, LPOP, RPOP, LRANGE, MULTI, EXEC, DISCARD, PING, PSYNC, REPLCONF, SET, TYPE, WAIT, XADD, XRANGE,
+        AUTH, CONFIG, DEL, ECHO, GET, INCR, INFO, KEYS, LPUSH, RPUSH, LPOP, RPOP, LRANGE, MULTI, EXEC, DISCARD, PING, PSYNC, PUBLISH, REPLCONF, SET, SUBSCRIBE, TYPE, UNSUBSCRIBE, WAIT, XADD, XRANGE,
         XREAD,
         EOF, // close a client connection
         TERMINATE; // close all connections and kill the server
@@ -26,7 +26,7 @@ public abstract class Command {
                 return null;
             }
         }
-        
+
         private static final Set<Type> WRITE_COMMANDS = Set.of(
                 SET, DEL, INCR, LPUSH, RPUSH, LPOP, RPOP, XADD
         );
