@@ -31,21 +31,21 @@ public class UnsubscribeCommand extends Command {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         try {
             if (channels.length == 0) {
-                //List<String> removed = service.unsubscribeAll();
-//                if (removed.isEmpty()) {
-//                    out.write(buildReply(null, 0));
-//                } else {
-//                    int remaining = removed.size();
-//                    for (String channel : removed) {
-//                        remaining--;
-//                        out.write(buildReply(channel, remaining));
-//                    }
-//                }
+                List<String> removed = service.unsubscribeAll();
+                if (removed.isEmpty()) {
+                    out.write(buildReply(null, 0));
+                } else {
+                    int remaining = removed.size();
+                    for (String channel : removed) {
+                        remaining--;
+                        out.write(buildReply(channel, remaining));
+                    }
+                }
             } else {
                 for (RespValue channel : channels) {
                     String name = channel.getValueAsString();
-                    //int count = service.unsubscribe(name);
-                    out.write(buildReply(name, 1));
+                    int count = service.unsubscribe(name);
+                    out.write(buildReply(name, count));
                 }
             }
         } catch (IOException e) {

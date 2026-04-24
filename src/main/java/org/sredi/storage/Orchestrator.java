@@ -75,6 +75,8 @@ public abstract class Orchestrator implements ReplicationServiceInfoProvider {
 
     // Handles MULTI/EXEC transaction queuing per connection
     private final TransactionManager transactionManager;
+    // Handles pub/sub channel subscriptions and message delivery
+    private final PubSubManager pubSubManager;
     private ClientConnection currentConnection;
     private final Object connectionLock = new Object();
 
@@ -110,6 +112,8 @@ public abstract class Orchestrator implements ReplicationServiceInfoProvider {
                 this::getCurrentConnection,
                 cmd -> cmd.execute(this)
         );
+        this.pubSubManager = new PubSubManager(this::getCurrentConnection);
+        this.connectionManager.setOnConnectionClosed(pubSubManager::removeConnection);
 
         loadDatabaseFromFile();
     }
@@ -268,6 +272,13 @@ public abstract class Orchestrator implements ReplicationServiceInfoProvider {
             return;
         }
 
+        // Subscribed mode: restrict commands while the connection has active subscriptions
+        if (pubSubManager.isSubscribed(conn) && !isAllowedInSubscribedMode(command)) {
+            conn.sendError("ERR Can't execute '" + command.getType()
+                    + "': only (P)SUBSCRIBE / (P)UNSUBSCRIBE / PING allowed in this context");
+            return;
+        }
+
         try {
             if (command.isBlockingCommand()) {
                 commandsExecutorService.submit(() -> {
@@ -372,10 +383,38 @@ public abstract class Orchestrator implements ReplicationServiceInfoProvider {
         return transactionManager.hasActiveTransaction(conn);
     }
 
+    // Subscribes the current connection to a channel; returns its total subscription count
+    public int subscribe(String channel) {
+        return pubSubManager.subscribe(channel);
+    }
+
+    // Unsubscribes the current connection from a channel; returns its remaining count
+    public int unsubscribe(String channel) {
+        return pubSubManager.unsubscribe(channel);
+    }
+
+    // Unsubscribes the current connection from all channels; returns the channels removed
+    public List<String> unsubscribeAll() {
+        return pubSubManager.unsubscribeAll();
+    }
+
+    // Delivers a message to all subscribers of a channel; returns delivery count
+    public int publish(String channel, byte[] message) {
+        return pubSubManager.publish(channel, message);
+    }
+
     // Returns true if the command should be queued during a transaction
     protected boolean isQueueableCommand(Command command) {
         Command.Type type = command.getType();
         return type != Command.Type.MULTI && type != Command.Type.EXEC && type != Command.Type.DISCARD;
+    }
+
+    // Returns true if the command is allowed while the connection is in subscribed mode
+    private boolean isAllowedInSubscribedMode(Command command) {
+        Command.Type type = command.getType();
+        return type == Command.Type.SUBSCRIBE
+                || type == Command.Type.UNSUBSCRIBE
+                || type == Command.Type.PING;
     }
 
     // Sets the connection context for the current command execution

@@ -30,8 +30,8 @@ public class SubscribeCommand extends Command {
         try {
             for (RespValue channel : channels) {
                 String name = channel.getValueAsString();
-                //int count = service.subscribe(name);
-                out.write(buildReply(name, 1));
+                int count = service.subscribe(name);
+                out.write(buildReply(name, count));
             }
         } catch (IOException e) {
             throw new RuntimeException(e);

@@ -7,7 +7,9 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.*;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
+import lombok.Setter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sredi.resp.RespValue;
@@ -27,6 +29,10 @@ public class ConnectionManager {
     private final Map<ClientConnection, Queue<RespValue>> pendingValues = new ConcurrentHashMap<>();
 
     private final Semaphore connectionSemaphore;
+
+    // Callback invoked when a connection is removed due to close; used for per-connection cleanup
+    @Setter
+    private Consumer<ClientConnection> onConnectionClosed;
 
     public ConnectionManager(int maxClients) {
         this.connectionSemaphore = maxClients > 0 ? new Semaphore(maxClients) : null;
@@ -60,6 +66,13 @@ public class ConnectionManager {
                 pendingValues.remove(conn);
                 iter.remove();
                 if (connectionSemaphore != null) connectionSemaphore.release();
+                if (onConnectionClosed != null) {
+                    try {
+                        onConnectionClosed.accept(conn);
+                    } catch (Exception e) {
+                        log.error("onConnectionClosed callback failed: {}", e.getMessage(), e);
+                    }
+                }
                 continue;
             }
 

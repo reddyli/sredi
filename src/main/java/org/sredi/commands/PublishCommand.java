@@ -25,8 +25,8 @@ public class PublishCommand extends Command {
 
     @Override
     public byte[] execute(Orchestrator service) {
-        //int delivered = service.publish(channel.getValueAsString(), message.getValue());
-        return new RespInteger(1).asResponse();
+        int delivered = service.publish(channel.getValueAsString(), message.getValue());
+        return new RespInteger(delivered).asResponse();
     }
 
     @Override
