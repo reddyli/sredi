@@ -209,48 +209,6 @@ public class ConnectionToLeader {
         return leaderConnection.equals(conn);
     }
 
-    // Executes a command received from the leader (after handshake)
-    public void executeCommandFromLeader(ClientConnection conn, Command command) throws IOException {
-        if (!isLeaderConnection(conn)) {
-            log.error("executeCommandFromLeader called with non-leader connection: {}", conn);
-            return;
-        }
-
-        logReceivedCommand(command);
-
-        byte[] response = command.execute(service);
-
-        if (shouldSendResponseToLeader(command)) {
-            sendResponseToLeader(conn, command, response);
-        } else {
-            log.trace("Not sending response for {}: {}", command.getType().name(), Command.responseLogString(response));
-        }
-    }
-
-    private void logReceivedCommand(Command command) {
-        if (command.isReplicatedCommand()) {
-            log.debug("Received replicated command from leader");
-        } else {
-            log.debug("Received request from leader");
-        }
-    }
-
-    private void sendResponseToLeader(ClientConnection conn, Command command, byte[] response) throws IOException {
-        log.debug("Sending {} response: {}", command.getType().name(), Command.responseLogString(response));
-        if (response != null && response.length > 0) {
-            conn.writeFlush(response);
-        }
-    }
-
-    // Determines if we should respond to the leader for this command
-    // Only REPLCONF GETACK requires a response; replicated writes don't
-    public boolean shouldSendResponseToLeader(Command command) {
-        if (command instanceof ReplConfCommand replConf) {
-            return replConf.getOptionsMap().containsKey(ReplConfCommand.GETACK_NAME);
-        }
-        return false;
-    }
-
     // Pairs a handshake command with its response handler
     private record HandshakeStep(
             Command command,

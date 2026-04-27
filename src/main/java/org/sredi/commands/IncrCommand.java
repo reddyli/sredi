@@ -1,6 +1,7 @@
 package org.sredi.commands;
 
 import lombok.Getter;
+import org.sredi.resp.RespArrayValue;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespInteger;
 import org.sredi.resp.RespValue;
@@ -61,6 +62,14 @@ public class IncrCommand extends Command{
         }
         
         return new RespInteger(0).asResponse();
+    }
+
+    @Override
+    public byte[] asCommand() {
+        return new RespArrayValue(new RespValue[] {
+                new RespBulkString(getType().name().getBytes()),
+                key
+        }).asResponse();
     }
 
     @Override

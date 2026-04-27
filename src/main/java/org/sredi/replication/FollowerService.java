@@ -99,6 +99,13 @@ public class FollowerService extends Orchestrator {
     // Executes command locally - followers don't propagate to other servers
     @Override
     public void execute(Command command, ClientConnection conn) throws IOException {
+        boolean fromLeader = leaderConnection != null && leaderConnection.isLeaderConnection(conn);
+
+        if (!fromLeader && command.getType().isWrite()) {
+            conn.sendError("READONLY You can't write against a read only replica.");
+            return;
+        }
+
         if (hasActiveTransaction(conn) && isQueueableCommand(command)) {
             queueCommand(command);
             conn.sendResponse(new RespSimpleStringValue("QUEUED").asResponse());
@@ -106,7 +113,7 @@ public class FollowerService extends Orchestrator {
         }
 
         byte[] response = command.execute(this);
-        if (response != null) {
+        if (response != null && !fromLeader) {
             conn.sendResponse(response);
         }
     }

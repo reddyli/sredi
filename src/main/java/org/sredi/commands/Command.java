@@ -43,7 +43,10 @@ public abstract class Command {
     }
 
     public boolean isReplicatedCommand() {
-        return type == Type.SET || type == Type.DEL;
+        return switch (type) {
+            case SET, DEL, INCR, LPUSH, RPUSH -> true;
+            default -> false;
+        };
     }
 
     public boolean isBlockingCommand() {

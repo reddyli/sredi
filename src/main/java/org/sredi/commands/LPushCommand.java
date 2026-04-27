@@ -1,7 +1,11 @@
 package org.sredi.commands;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
+import org.sredi.resp.RespArrayValue;
+import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespInteger;
 import org.sredi.resp.RespValue;
 import org.sredi.storage.Orchestrator;
@@ -9,7 +13,7 @@ import org.sredi.storage.Orchestrator;
 public class LPushCommand extends Command {
 
     private String key;
-    private String value;
+    private List<String> values;
 
     public LPushCommand() {
         super(Type.LPUSH);
@@ -20,17 +24,38 @@ public class LPushCommand extends Command {
         ArgReader argReader = new ArgReader(type.name(), new String[] {
                 ":string", // command name
                 ":string", // key
-                ":string"  // value
+                ":var"     // values
         });
         Map<String, RespValue> optionsMap = argReader.readArgs(args);
         this.key = optionsMap.get("1").getValueAsString();
-        this.value = optionsMap.get("2").getValueAsString();
+        RespValue[] varValues = ((RespArrayValue) optionsMap.get("2")).getValues();
+        this.values = new ArrayList<>(varValues.length);
+        for (RespValue v : varValues) {
+            this.values.add(v.getValueAsString());
+        }
+        if (this.values.isEmpty()) {
+            throw new IllegalArgumentException("LPUSH: wrong number of arguments");
+        }
     }
 
     @Override
     public byte[] execute(Orchestrator service) {
-        long size = service.lpush(key, value);
+        long size = 0;
+        for (String v : values) {
+            size = service.lpush(key, v);
+        }
         return new RespInteger(size).asResponse();
+    }
+
+    @Override
+    public byte[] asCommand() {
+        List<RespValue> cmdValues = new ArrayList<>(values.size() + 2);
+        cmdValues.add(new RespBulkString(getType().name().getBytes()));
+        cmdValues.add(new RespBulkString(key.getBytes()));
+        for (String v : values) {
+            cmdValues.add(new RespBulkString(v.getBytes()));
+        }
+        return new RespArrayValue(cmdValues.toArray(new RespValue[0])).asResponse();
     }
 
     @Override
@@ -38,6 +63,6 @@ public class LPushCommand extends Command {
 
     @Override
     public String toString() {
-        return "LPushCommand [key=" + key + ", value=" + value + "]";
+        return "LPushCommand [key=" + key + ", values=" + values + "]";
     }
 }

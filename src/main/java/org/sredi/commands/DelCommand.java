@@ -1,10 +1,13 @@
 package org.sredi.commands;
 
 import org.sredi.resp.RespArrayValue;
+import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespInteger;
 import org.sredi.resp.RespValue;
 import org.sredi.storage.Orchestrator;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 public class DelCommand extends Command{
@@ -34,6 +37,16 @@ public class DelCommand extends Command{
             }
         }
         return new RespInteger(deletedKeysCount).asResponse();
+    }
+
+    @Override
+    public byte[] asCommand() {
+        List<RespValue> cmdValues = new ArrayList<>(keys.length + 1);
+        cmdValues.add(new RespBulkString(getType().name().getBytes()));
+        for (RespValue k : keys) {
+            cmdValues.add(new RespBulkString(k.getValueAsString().getBytes()));
+        }
+        return new RespArrayValue(cmdValues.toArray(new RespValue[0])).asResponse();
     }
 
     @Override
