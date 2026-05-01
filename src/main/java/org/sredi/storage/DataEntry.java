@@ -13,6 +13,7 @@ public class DataEntry {
     private final byte[] value;
     private final StreamData streamValue;
     private final LinkedList<String> listValue;
+    private final BloomFilter bloomValue;
     private final DataEntryType type;
     private final long storedAt;
     private final Long ttlMillis;
@@ -22,6 +23,7 @@ public class DataEntry {
         this.storedAt = storedAt;
         this.ttlMillis = ttlMillis;
         this.streamValue = null;
+        this.bloomValue = null;
         this.type = DataEntryType.LIST;
         this.value = null;
     }
@@ -33,6 +35,7 @@ public class DataEntry {
         this.storedAt = storedAt;
         this.ttlMillis = ttlMillis;
         this.listValue = null;
+        this.bloomValue = null;
     }
 
     public DataEntry(byte[] value, long storedAt, Long ttlMillis) {
@@ -42,6 +45,17 @@ public class DataEntry {
         this.storedAt = storedAt;
         this.ttlMillis = ttlMillis;
         this.listValue = null;
+        this.bloomValue = null;
+    }
+
+    public DataEntry(BloomFilter bloomValue, long storedAt, Long ttlMillis) {
+        this.value = null;
+        this.streamValue = null;
+        this.listValue = null;
+        this.bloomValue = bloomValue;
+        this.type = DataEntryType.BLOOM;
+        this.storedAt = storedAt;
+        this.ttlMillis = ttlMillis;
     }
 
     public boolean isExpired(long currentTimeMillis) {

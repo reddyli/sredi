@@ -55,6 +55,9 @@ public class CommandConstructor {
         case XADD -> new XaddCommand();
         case XRANGE -> new XrangeCommand();
         case XREAD -> new XreadCommand();
+        case BF_ADD -> new BfAddCommand();
+        case BF_EXISTS -> new BfExistsCommand();
+        case BF_RESERVE -> new BfReserveCommand();
         // special non-standard commands
         case EOF -> new EofCommand();
         case TERMINATE -> new TerminateCommand();

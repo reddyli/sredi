@@ -16,19 +16,21 @@ public abstract class Command {
     public enum Type {
         AUTH, CONFIG, DEL, ECHO, GET, INCR, INFO, KEYS, LPUSH, RPUSH, LPOP, RPOP, LRANGE, MULTI, EXEC, DISCARD, PING, PSYNC, PUBLISH, REPLCONF, SET, SUBSCRIBE, TYPE, UNSUBSCRIBE, WAIT, XADD, XRANGE,
         XREAD,
+        BF_ADD, BF_EXISTS, BF_RESERVE,
         EOF, // close a client connection
         TERMINATE; // close all connections and kill the server
 
         static Type of(String command) {
             try {
-                return Type.valueOf(command);
+                return Type.valueOf(command.replace('.', '_'));
             } catch (Exception e) {
                 return null;
             }
         }
 
         private static final Set<Type> WRITE_COMMANDS = Set.of(
-                SET, DEL, INCR, LPUSH, RPUSH, LPOP, RPOP, XADD
+                SET, DEL, INCR, LPUSH, RPUSH, LPOP, RPOP, XADD,
+                BF_ADD, BF_RESERVE
         );
 
         public boolean isWrite() {
@@ -44,7 +46,7 @@ public abstract class Command {
 
     public boolean isReplicatedCommand() {
         return switch (type) {
-            case SET, DEL, INCR, LPUSH, RPUSH -> true;
+            case SET, DEL, INCR, LPUSH, RPUSH, BF_ADD, BF_RESERVE -> true;
             default -> false;
         };
     }

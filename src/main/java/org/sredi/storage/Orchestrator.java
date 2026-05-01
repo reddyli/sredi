@@ -243,6 +243,11 @@ public abstract class Orchestrator implements ReplicationServiceInfoProvider {
     public String lpop(String key) { return dataStore.lpop(key); }
     public String rpop(String key) { return dataStore.rpop(key); }
     public List<String> lrange(String key, int start, int end) { return dataStore.lrange(key, start, end); }
+
+    public void bfReserve(String key, long capacity, double errorRate) { dataStore.bfReserve(key, capacity, errorRate); }
+    public BloomFilter bfGetOrCreate(String key, long capacity, double errorRate) { return dataStore.bfGetOrCreate(key, capacity, errorRate); }
+    public BloomFilter bfGet(String key) { return dataStore.bfGet(key); }
+
     // Subclasses implement this to handle command execution and replication
     public abstract void execute(Command command, ClientConnection conn) throws IOException;
 

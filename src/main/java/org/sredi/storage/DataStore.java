@@ -160,6 +160,45 @@ public class DataStore {
         return new ArrayList<>(list.subList(start, end + 1));
     }
 
+    // Bloom filter operations
+
+    private static final String WRONG_TYPE = "WRONGTYPE Operation against a key holding the wrong kind of value";
+
+    public void bfReserve(String key, long capacity, double errorRate) {
+        if (entries.containsKey(key)) {
+            throw new IllegalStateException("ERR item exists");
+        }
+        evictIfNeeded(key);
+        lru.logKeyAccess(key);
+        entries.put(key, new DataEntry(new BloomFilter(capacity, errorRate), clock.millis(), null));
+    }
+
+    public BloomFilter bfGetOrCreate(String key, long capacity, double errorRate) {
+        DataEntry existing = entries.get(key);
+        if (existing != null) {
+            if (existing.getType() != DataEntryType.BLOOM) {
+                throw new IllegalStateException(WRONG_TYPE);
+            }
+            lru.logKeyAccess(key);
+            return existing.getBloomValue();
+        }
+        evictIfNeeded(key);
+        lru.logKeyAccess(key);
+        BloomFilter bf = new BloomFilter(capacity, errorRate);
+        entries.put(key, new DataEntry(bf, clock.millis(), null));
+        return bf;
+    }
+
+    public BloomFilter bfGet(String key) {
+        DataEntry entry = entries.get(key);
+        if (entry == null) return null;
+        if (entry.getType() != DataEntryType.BLOOM) {
+            throw new IllegalStateException(WRONG_TYPE);
+        }
+        lru.logKeyAccess(key);
+        return entry.getBloomValue();
+    }
+
     // TTL cleanup - scans and removes expired keys
     public void cleanupExpiredKeys() {
         for (String key : entries.keySet()) {
