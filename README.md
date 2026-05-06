@@ -9,6 +9,8 @@ A High Performance, distributed in-memory storage system written in Java.
 | Basic | PING, ECHO, GET, SET, DEL, INCR, TYPE, KEYS, INFO, CONFIG, AUTH |
 | Lists | LPUSH, RPUSH, LPOP, RPOP, LRANGE |
 | Streams | XADD, XRANGE, XREAD |
+| Pub/Sub | SUBSCRIBE, UNSUBSCRIBE, PUBLISH |
+| Bloom Filter | BF.ADD, BF.EXISTS, BF.RESERVE |
 | Replication | PSYNC, REPLCONF, WAIT |
 | Transactions | MULTI, EXEC, DISCARD |
 
@@ -18,6 +20,8 @@ A High Performance, distributed in-memory storage system written in Java.
 | Feature | Description                                              |
 |---------|----------------------------------------------------------|
 | Streams | Append-only logs with ID generation and range queries    |
+| Pub/Sub | Channel-based publish/subscribe with local fanout |
+| Bloom Filter | Probabilistic set membership with BF.ADD/BF.EXISTS/BF.RESERVE |
 | Replication | Leader-follower with full resync and command propagation |
 | Transactions | MULTI/EXEC/DISCARD with per-connection command queuing   |
 | Persistence | RDB file reading on startup                              |
@@ -33,9 +37,7 @@ A High Performance, distributed in-memory storage system written in Java.
 ### Upcoming
 | Feature | Description |
 |---------|-------------|
-| Pub/Sub | SUBSCRIBE, PUBLISH messaging |
 | Leader Election | Bully algorithm |
-| Bloom Filter | Probabilistic set membership with BF.ADD/BF.EXISTS |
 
 ## Getting Started
 

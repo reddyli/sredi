@@ -35,7 +35,7 @@ public class ConnectionToLeader {
     private static final Logger log = LoggerFactory.getLogger(ConnectionToLeader.class);
     private static final long HANDSHAKE_POLL_INTERVAL_MS = 50L;
 
-    private final FollowerService service;
+    private final FollowerSubsystem subsystem;
     private final ClientConnection leaderConnection;
     private final ExecutorService executor;
 
@@ -51,12 +51,12 @@ public class ConnectionToLeader {
 
     private volatile boolean done = false;
 
-    public ConnectionToLeader(FollowerService service) throws IOException {
-        this.service = service;
+    public ConnectionToLeader(FollowerSubsystem subsystem) throws IOException {
+        this.subsystem = subsystem;
         this.executor = Executors.newSingleThreadExecutor();
 
         RespValueParser valueParser = new RespValueParser();
-        this.leaderConnection = new ClientConnection(service.getLeaderClientSocket(), valueParser);
+        this.leaderConnection = new ClientConnection(subsystem.getLeaderClientSocket(), valueParser);
         log.info("Connection to leader: {}, isOpened: {}", leaderConnection, !leaderConnection.isClosed());
 
         startHandshakeThread();
@@ -84,7 +84,7 @@ public class ConnectionToLeader {
     private boolean onPingResponse(Command cmd, RespValue response) {
         ReplConfCommand portConf = new ReplConfCommand(
                 ReplConfCommand.Option.LISTENING_PORT,
-                String.valueOf(service.getPort()));
+                String.valueOf(subsystem.getPort()));
         queueHandshakeStep(portConf, this::onListeningPortResponse);
         return false;
     }
@@ -125,7 +125,7 @@ public class ConnectionToLeader {
         log.info("Handshake completed, received {} bytes during handshake", handshakeBytesReceived);
 
         // Register with ConnectionManager to receive replicated commands
-        service.getConnectionManager().addPriorityConnection(leaderConnection);
+        subsystem.getConnectionManager().addPriorityConnection(leaderConnection);
     }
 
     // Adds a command to the handshake queue
@@ -140,10 +140,10 @@ public class ConnectionToLeader {
 
     // Closes connection to leader and shuts down executor
     public void terminate() {
-        log.info("Terminating connection to leader: {}", service.getLeaderClientSocket());
+        log.info("Terminating connection to leader: {}", subsystem.getLeaderClientSocket());
         done = true;
         try {
-            service.getLeaderClientSocket().close();
+            subsystem.getLeaderClientSocket().close();
         } catch (IOException e) {
             log.error("Error closing socket to leader: {}", e.getMessage());
         }
@@ -156,7 +156,7 @@ public class ConnectionToLeader {
             if (leaderConnection.isClosed()) {
                 log.warn("Leader closed connection");
                 terminate();
-                service.reconnectToLeader();
+                subsystem.reconnectToLeader();
                 return;
             }
 

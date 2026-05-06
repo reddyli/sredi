@@ -137,9 +137,9 @@ class IntegrationTest {
 
     /**
      * Minimal testable orchestrator that doesn't start network services.
-     * Extends LeaderService but skips the start() method.
+     * Boots in the default leader role and skips the start() method.
      */
-    static class TestableOrchestrator extends org.sredi.replication.LeaderService {
+    static class TestableOrchestrator extends Orchestrator {
 
         TestableOrchestrator(Clock clock) {
             super(createTestOptions(), clock);

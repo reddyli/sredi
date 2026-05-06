@@ -11,8 +11,8 @@ import org.sredi.commands.TerminateCommand;
 import org.sredi.constants.ReplicationConstants;
 import org.sredi.replication.ClientConnection;
 import org.sredi.replication.ConnectionManager;
-import org.sredi.replication.FollowerService;
-import org.sredi.replication.LeaderService;
+import org.sredi.replication.FollowerSubsystem;
+import org.sredi.replication.LeaderSubsystem;
 import org.sredi.replication.ReplicationServiceInfoProvider;
 import org.sredi.resp.RespConstants;
 import org.sredi.resp.RespSimpleStringValue;
@@ -35,14 +35,18 @@ import java.util.concurrent.*;
 /**
  * Core server orchestrator that manages client connections, command execution, and replication.
  * Data operations are delegated to {@link DataStore}.
- * Abstract class with concrete implementations: {@link org.sredi.replication.LeaderService} and {@link org.sredi.replication.FollowerService}.
+ * Holds a {@link LeaderSubsystem} or {@link FollowerSubsystem} depending on the current role,
+ * and exposes {@link #becomeLeader()} / {@link #becomeFollowerOf(String, int)} so the role
+ * can change at runtime (e.g. after a leader election).
  */
 
-public abstract class Orchestrator implements ReplicationServiceInfoProvider {
+public class Orchestrator implements ReplicationServiceInfoProvider {
     private static final Logger log = LoggerFactory.getLogger(Orchestrator.class);
 
     private static final Set<String> DEFAULT_INFO_SECTIONS = Set.of("server", "replication", "stats", "replication-graph");
     private static final int CONNECTION_THREAD_POOL_SIZE = 2;
+
+    public enum Role { LEADER, FOLLOWER }
 
     // Server socket and event loop for accepting and processing client requests
     private ServerSocket serverSocket;
@@ -66,8 +70,14 @@ public abstract class Orchestrator implements ReplicationServiceInfoProvider {
     private final SetupOptions options;
     @Getter
     private final int port;
-    private final String role;
     protected final Clock clock;
+
+    // Current role and the subsystem that implements its replication behavior.
+    // Exactly one of leaderSubsystem / followerSubsystem is non-null at a time.
+    private volatile Role role;
+    private volatile LeaderSubsystem leaderSubsystem;
+    private volatile FollowerSubsystem followerSubsystem;
+    private final Object roleLock = new Object();
 
     // In-memory data store with LRU and eviction
     @Getter
@@ -81,22 +91,17 @@ public abstract class Orchestrator implements ReplicationServiceInfoProvider {
     private final Object connectionLock = new Object();
 
 
-    // Creates a LeaderService or FollowerService based on the configured role
+    // Factory retained for backwards compatibility; the Orchestrator constructor
+    // now decides the initial role itself based on SetupOptions.
     public static Orchestrator newInstance(SetupOptions options, Clock clock) {
-        String role = options.getRole();
-        return switch (role) {
-            case ReplicationConstants.REPLICA -> new FollowerService(options, clock);
-            case ReplicationConstants.MASTER -> new LeaderService(options, clock);
-            default -> throw new UnsupportedOperationException(
-                    "Unexpected role type: " + role);
-        };
+        return new Orchestrator(options, clock);
     }
 
-    // Initializes thread pools, connection manager, and loads any persisted data
-    protected Orchestrator(SetupOptions options, Clock clock) {
+    // Initializes thread pools, connection manager, the initial role subsystem,
+    // and loads any persisted data
+    public Orchestrator(SetupOptions options, Clock clock) {
         this.options = options;
         this.port = options.getPort();
-        this.role = options.getRole();
         this.clock = clock;
         this.commandConstructor = new CommandConstructor();
         this.valueParser = new RespValueParser();
@@ -115,7 +120,27 @@ public abstract class Orchestrator implements ReplicationServiceInfoProvider {
         this.pubSubManager = new PubSubManager(this::getCurrentConnection);
         this.connectionManager.setOnConnectionClosed(pubSubManager::removeConnection);
 
+        if (ReplicationConstants.REPLICA.equals(options.getRole())) {
+            this.role = Role.FOLLOWER;
+            this.followerSubsystem = newFollowerSubsystem(options.getReplicaof(), options.getReplicaofPort());
+        } else {
+            this.role = Role.LEADER;
+            this.leaderSubsystem = newLeaderSubsystem();
+        }
+
         loadDatabaseFromFile();
+    }
+
+    private LeaderSubsystem newLeaderSubsystem() {
+        return new LeaderSubsystem(connectionManager, clock, options.getMaxReplBacklog());
+    }
+
+    private FollowerSubsystem newFollowerSubsystem(String leaderHost, int leaderPort) {
+        return new FollowerSubsystem(connectionManager, port, leaderHost, leaderPort, this::isShutdownRequested);
+    }
+
+    public Role getRole() {
+        return role;
     }
 
     // Loads persisted data from RDB file if configured
@@ -139,7 +164,8 @@ public abstract class Orchestrator implements ReplicationServiceInfoProvider {
     }
 
 
-    // Opens the server socket and starts accepting client connections
+    // Opens the server socket, starts accepting client connections, and starts
+    // the role-specific subsystem (leader or follower)
     public void start() throws IOException {
         serverSocket = new ServerSocket(port);
         serverSocket.setReuseAddress(true);
@@ -153,6 +179,11 @@ public abstract class Orchestrator implements ReplicationServiceInfoProvider {
         cleanupExecutorService.scheduleAtFixedRate(
                 dataStore::cleanupExpiredKeys, 10, 30, TimeUnit.SECONDS);
 
+        if (leaderSubsystem != null) {
+            leaderSubsystem.start();
+        } else if (followerSubsystem != null) {
+            followerSubsystem.start();
+        }
     }
 
     // Runs a background thread that accepts incoming socket connections
@@ -209,9 +240,51 @@ public abstract class Orchestrator implements ReplicationServiceInfoProvider {
 
     // Shuts down thread pools without waiting for completion
     public void shutdown() {
+        if (leaderSubsystem != null) leaderSubsystem.stop();
+        if (followerSubsystem != null) followerSubsystem.stop();
         connectionsExecutorService.shutdown();
         commandsExecutorService.shutdown();
         cleanupExecutorService.shutdown();
+    }
+
+    // Promotes this node to the leader role. Tears down any active follower
+    // subsystem and starts a fresh leader subsystem.
+    public void becomeLeader() {
+        synchronized (roleLock) {
+            if (role == Role.LEADER) return;
+            tearDownFollower();
+            this.leaderSubsystem = newLeaderSubsystem();
+            this.leaderSubsystem.start();
+            this.role = Role.LEADER;
+            log.info("Promoted to LEADER");
+        }
+    }
+
+    // Demotes this node to the follower role and connects to the given leader.
+    // Tears down any active leader subsystem and starts a fresh follower subsystem.
+    public void becomeFollowerOf(String leaderHost, int leaderPort) throws IOException {
+        synchronized (roleLock) {
+            tearDownLeader();
+            FollowerSubsystem next = newFollowerSubsystem(leaderHost, leaderPort);
+            this.followerSubsystem = next;
+            this.role = Role.FOLLOWER;
+            next.start();
+            log.info("Following leader {}:{}", leaderHost, leaderPort);
+        }
+    }
+
+    private void tearDownLeader() {
+        if (leaderSubsystem != null) {
+            leaderSubsystem.stop();
+            leaderSubsystem = null;
+        }
+    }
+
+    private void tearDownFollower() {
+        if (followerSubsystem != null) {
+            followerSubsystem.stop();
+            followerSubsystem = null;
+        }
     }
 
     // Returns a configuration value by name (e.g., dir, dbfilename)
@@ -248,8 +321,56 @@ public abstract class Orchestrator implements ReplicationServiceInfoProvider {
     public BloomFilter bfGetOrCreate(String key, long capacity, double errorRate) { return dataStore.bfGetOrCreate(key, capacity, errorRate); }
     public BloomFilter bfGet(String key) { return dataStore.bfGet(key); }
 
-    // Subclasses implement this to handle command execution and replication
-    public abstract void execute(Command command, ClientConnection conn) throws IOException;
+    // Handles command execution, dispatching based on the current role.
+    // Leader: runs the command, replies, and replicates writes to followers.
+    // Follower: rejects writes from non-leader connections, otherwise runs
+    // them locally and only replies to non-leader callers.
+    public void execute(Command command, ClientConnection conn) throws IOException {
+        if (role == Role.LEADER) {
+            executeAsLeader(command, conn);
+        } else {
+            executeAsFollower(command, conn);
+        }
+    }
+
+    private void executeAsLeader(Command command, ClientConnection conn) throws IOException {
+        if (hasActiveTransaction(conn) && isQueueableCommand(command)) {
+            queueCommand(command);
+            conn.sendResponse(new RespSimpleStringValue("QUEUED").asResponse());
+            return;
+        }
+
+        byte[] response = command.execute(this);
+        if (response != null) {
+            conn.sendResponse(response);
+        }
+
+        LeaderSubsystem ls = leaderSubsystem;
+        if (ls != null) {
+            ls.replicate(command);
+        }
+    }
+
+    private void executeAsFollower(Command command, ClientConnection conn) throws IOException {
+        FollowerSubsystem fs = followerSubsystem;
+        boolean fromLeader = fs != null && fs.isLeaderConnection(conn);
+
+        if (!fromLeader && command.getType().isWrite()) {
+            conn.sendError("READONLY You can't write against a read only replica.");
+            return;
+        }
+
+        if (hasActiveTransaction(conn) && isQueueableCommand(command)) {
+            queueCommand(command);
+            conn.sendResponse(new RespSimpleStringValue("QUEUED").asResponse());
+            return;
+        }
+
+        byte[] response = command.execute(this);
+        if (response != null && !fromLeader) {
+            conn.sendResponse(response);
+        }
+    }
 
     // Executes a command using the current connection context
     public void execute(Command command) throws IOException {
@@ -314,9 +435,12 @@ public abstract class Orchestrator implements ReplicationServiceInfoProvider {
         }
     }
 
-    // Called after PSYNC completes - subclasses can override to register followers
+    // Called after PSYNC completes; on a leader, registers the follower for replication
     protected void onPsyncComplete(ClientConnection conn) {
-        // Default no-op. LeaderService overrides to register the follower.
+        LeaderSubsystem ls = leaderSubsystem;
+        if (ls != null) {
+            ls.registerFollower(conn);
+        }
     }
 
     // Builds the INFO command response based on requested sections
@@ -330,11 +454,23 @@ public abstract class Orchestrator implements ReplicationServiceInfoProvider {
 
         if (shouldIncludeSection(optionsMap, "replication")) {
             sb.append("# Replication\n");
-            sb.append("role:").append(role).append("\n");
+            sb.append("role:").append(roleString()).append("\n");
             getReplicationInfo(sb);
         }
 
         return sb.toString();
+    }
+
+    private String roleString() {
+        return role == Role.LEADER ? ReplicationConstants.MASTER : ReplicationConstants.REPLICA;
+    }
+
+    @Override
+    public void getReplicationInfo(StringBuilder sb) {
+        LeaderSubsystem ls = leaderSubsystem;
+        if (ls != null) {
+            ls.appendReplicationInfo(sb);
+        }
     }
 
     // Determines if a section should be included in the INFO response
@@ -346,21 +482,40 @@ public abstract class Orchestrator implements ReplicationServiceInfoProvider {
                 || optionsMap.containsKey(section);
     }
 
-    // Handles REPLCONF ACK from followers to track replication progress
-    public abstract byte[] replicationConfirm(ClientConnection connection, Map<String, RespValue> optionsMap,
-            long startBytesOffset);
-
-    // Blocks until the specified number of replicas have acknowledged writes
-    public abstract int waitForReplicationServers(int numReplicas, long timeoutMillis);
-
-    // Initiates partial resynchronization with a replica
-    public byte[] psync(Map<String, RespValue> optionsMap) {
+    // Handles REPLCONF GETACK / ACK; routed to the active subsystem
+    public byte[] replicationConfirm(ClientConnection connection, Map<String, RespValue> optionsMap,
+            long startBytesOffset) {
+        LeaderSubsystem ls = leaderSubsystem;
+        if (ls != null) {
+            return ls.replicationConfirm(connection, optionsMap, startBytesOffset);
+        }
+        FollowerSubsystem fs = followerSubsystem;
+        if (fs != null) {
+            return fs.replicationConfirm(connection, optionsMap, startBytesOffset);
+        }
         return RespConstants.OK;
     }
 
-    // Sends the RDB snapshot during full resynchronization
+    // Blocks until the specified number of replicas have acknowledged writes.
+    // Followers always return 0.
+    public int waitForReplicationServers(int numReplicas, long timeoutMillis) {
+        LeaderSubsystem ls = leaderSubsystem;
+        return ls != null ? ls.waitForReplicas(numReplicas, timeoutMillis) : 0;
+    }
+
+    // Initiates partial resynchronization with a replica (leader-only)
+    public byte[] psync(Map<String, RespValue> optionsMap) {
+        LeaderSubsystem ls = leaderSubsystem;
+        return ls != null ? ls.psyncResponse() : RespConstants.OK;
+    }
+
+    // Sends the RDB snapshot during full resynchronization (leader-only)
     public byte[] psyncRdb(Map<String, RespValue> optionsMap) {
-        throw new UnsupportedOperationException("psync RDB not supported for this role");
+        LeaderSubsystem ls = leaderSubsystem;
+        if (ls == null) {
+            throw new UnsupportedOperationException("psync RDB not supported for this role");
+        }
+        return ls.psyncRdb();
     }
 
     // Begins a new transaction for the current connection

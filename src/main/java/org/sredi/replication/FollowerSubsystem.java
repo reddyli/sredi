@@ -2,32 +2,35 @@ package org.sredi.replication;
 
 import java.io.IOException;
 import java.net.Socket;
-import java.time.Clock;
 import java.util.Map;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.function.BooleanSupplier;
 
 import lombok.Getter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sredi.commands.Command;
 import org.sredi.commands.ReplConfCommand;
 import org.sredi.resp.RespArrayValue;
 import org.sredi.resp.RespBulkString;
 import org.sredi.resp.RespConstants;
-import org.sredi.resp.RespSimpleStringValue;
 import org.sredi.resp.RespValue;
-import org.sredi.setup.SetupOptions;
-import org.sredi.storage.Orchestrator;
 
 /**
- * Follower (replica) implementation of Orchestrator.
- * Connects to a leader server, performs handshake, and receives replicated commands.
- * Does not propagate commands further - it's a read replica that stays in sync with the leader.
+ * Pluggable subsystem encapsulating follower-only replication state and behavior.
+ * Owns the socket and {@link ConnectionToLeader} that read commands from the leader.
+ * Designed to be started and stopped at runtime so a node can transition
+ * into and out of the follower role without restarting the JVM.
  */
-public class FollowerService extends Orchestrator {
-    private static final Logger log = LoggerFactory.getLogger(FollowerService.class);
+public class FollowerSubsystem {
+    private static final Logger log = LoggerFactory.getLogger(FollowerSubsystem.class);
     private static final int MAX_RECONNECT_DELAY_MS = 30_000;
     private static final int INITIAL_RECONNECT_DELAY_MS = 1_000;
+
+    @Getter
+    private final ConnectionManager connectionManager;
+
+    @Getter
+    private final int port;
 
     @Getter
     private final String leaderHost;
@@ -35,26 +38,34 @@ public class FollowerService extends Orchestrator {
     @Getter
     private final int leaderPort;
 
+    private final BooleanSupplier shutdownRequested;
+
     @Getter
     private Socket leaderClientSocket;
 
     @Getter
     private ConnectionToLeader leaderConnection;
 
-    public FollowerService(SetupOptions options, Clock clock) {
-        super(options, clock);
-        this.leaderHost = options.getReplicaof();
-        this.leaderPort = options.getReplicaofPort();
+    private volatile boolean stopped = false;
+
+    public FollowerSubsystem(ConnectionManager connectionManager, int port,
+            String leaderHost, int leaderPort, BooleanSupplier shutdownRequested) {
+        this.connectionManager = connectionManager;
+        this.port = port;
+        this.leaderHost = leaderHost;
+        this.leaderPort = leaderPort;
+        this.shutdownRequested = shutdownRequested;
     }
 
-    // Starts the service and initiates connection to the leader
-    @Override
+    // Connects to the leader and starts the replication handshake
     public void start() throws IOException {
-        super.start();
+        if (stopped) {
+            throw new IllegalStateException("Subsystem already stopped");
+        }
         connectToLeader();
+        log.info("Follower subsystem started, leader={}:{}", leaderHost, leaderPort);
     }
 
-    // Establishes socket connection to leader and starts handshake
     private void connectToLeader() throws IOException {
         leaderClientSocket = new Socket(leaderHost, leaderPort);
         leaderClientSocket.setReuseAddress(true);
@@ -62,14 +73,30 @@ public class FollowerService extends Orchestrator {
         leaderConnection.startHandshake();
     }
 
-    // Reconnects to leader with exponential backoff
+    // Tears down the leader connection and prevents further reconnects
+    public void stop() {
+        if (stopped) return;
+        stopped = true;
+        if (leaderConnection != null) {
+            leaderConnection.terminate();
+        }
+        log.info("Follower subsystem stopped");
+    }
+
+    public boolean isStopped() {
+        return stopped;
+    }
+
+    // Reconnects to leader with exponential backoff, exits when stopped or shut down
     public void reconnectToLeader() {
+        if (stopped) return;
         Thread reconnectThread = new Thread(() -> {
             int delay = INITIAL_RECONNECT_DELAY_MS;
-            while (!isShutdownRequested()) {
+            while (!stopped && !shutdownRequested.getAsBoolean()) {
                 try {
                     log.info("Attempting to reconnect to leader in {}ms...", delay);
                     Thread.sleep(delay);
+                    if (stopped || shutdownRequested.getAsBoolean()) return;
                     connectToLeader();
                     log.info("Reconnected to leader successfully");
                     return;
@@ -87,39 +114,12 @@ public class FollowerService extends Orchestrator {
         reconnectThread.start();
     }
 
-    // Closes connection to leader on shutdown
-    @Override
-    public void shutdown() {
-        super.shutdown();
-        if (leaderConnection != null) {
-            leaderConnection.terminate();
-        }
+    // Returns true if the given client connection is the one to the leader
+    public boolean isLeaderConnection(ClientConnection conn) {
+        return leaderConnection != null && leaderConnection.isLeaderConnection(conn);
     }
 
-    // Executes command locally - followers don't propagate to other servers
-    @Override
-    public void execute(Command command, ClientConnection conn) throws IOException {
-        boolean fromLeader = leaderConnection != null && leaderConnection.isLeaderConnection(conn);
-
-        if (!fromLeader && command.getType().isWrite()) {
-            conn.sendError("READONLY You can't write against a read only replica.");
-            return;
-        }
-
-        if (hasActiveTransaction(conn) && isQueueableCommand(command)) {
-            queueCommand(command);
-            conn.sendResponse(new RespSimpleStringValue("QUEUED").asResponse());
-            return;
-        }
-
-        byte[] response = command.execute(this);
-        if (response != null && !fromLeader) {
-            conn.sendResponse(response);
-        }
-    }
-
-    // Handles REPLCONF GETACK - responds with bytes received since handshake completed
-    @Override
+    // Handles REPLCONF GETACK from leader, responding with bytes received post-handshake
     public byte[] replicationConfirm(ClientConnection connection, Map<String, RespValue> optionsMap,
             long startBytesOffset) {
         if (optionsMap.containsKey(ReplConfCommand.GETACK_NAME)) {
@@ -131,17 +131,5 @@ public class FollowerService extends Orchestrator {
             }).asResponse();
         }
         return RespConstants.OK;
-    }
-
-    // Followers don't have replicas, so WAIT always returns 0
-    @Override
-    public int waitForReplicationServers(int numReplicas, long timeoutMillis) {
-        return 0;
-    }
-
-    // No additional replication info for followers
-    @Override
-    public void getReplicationInfo(StringBuilder sb) {
-        // Followers don't report replication offset info
     }
 }

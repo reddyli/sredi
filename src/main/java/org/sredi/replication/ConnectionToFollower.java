@@ -21,7 +21,7 @@ public class ConnectionToFollower {
 
     private static final Logger log = LoggerFactory.getLogger(ConnectionToFollower.class);
 
-    private final LeaderService service;
+    private final LeaderSubsystem subsystem;
 
     @Getter
     private final ClientConnection followerConnection;
@@ -32,8 +32,8 @@ public class ConnectionToFollower {
     @Setter
     private volatile boolean testingDontWaitForAck = true;
 
-    public ConnectionToFollower(LeaderService service, ClientConnection followerConnection, int maxBacklog) {
-        this.service = service;
+    public ConnectionToFollower(LeaderSubsystem subsystem, ClientConnection followerConnection, int maxBacklog) {
+        this.subsystem = subsystem;
         this.followerConnection = followerConnection;
         this.replicationQueue = new LinkedBlockingQueue<>(maxBacklog);
     }
@@ -61,7 +61,7 @@ public class ConnectionToFollower {
 
     // Returns the leader's current replication offset
     public long getTotalReplicationOffset() {
-        return service.getTotalReplicationOffset();
+        return subsystem.getTotalReplicationOffset();
     }
 
     // Sends REPLCONF GETACK to follower and waits for ACK response
@@ -88,7 +88,7 @@ public class ConnectionToFollower {
     private RespValue waitForAckResponse(long timeoutMillis) throws InterruptedException {
         log.debug("sendAndWaitForReplConfAck: waiting for REPLCONF ACK");
         followerConnection.waitForNewValueAvailable(timeoutMillis);
-        RespValue response = service.getConnectionManager().getNextValue(followerConnection);
+        RespValue response = subsystem.getConnectionManager().getNextValue(followerConnection);
         log.debug("sendAndWaitForReplConfAck: got response from replica: {}", response);
         return response;
     }
