@@ -27,6 +27,8 @@ public class SetupOptions {
     private boolean parallel = false;
     private int parallelThreads = Runtime.getRuntime().availableProcessors();
     private int maxReplBacklog = 25;
+    private String nodeId;
+    private String cluster;
 
     public boolean parseArgs(String[] args) {
         Options options = new Options();
@@ -97,6 +99,18 @@ public class SetupOptions {
                 .desc("Maximum replication backlog queue size per follower")
                 .build());
 
+        options.addOption(Option.builder()
+                .longOpt("node-id")
+                .hasArg(true)
+                .desc("Stable id for this node within the cluster")
+                .build());
+
+        options.addOption(Option.builder()
+                .longOpt("cluster")
+                .hasArg(true)
+                .desc("Comma-separated peer list: id1@host1:port1,id2@host2:port2,...")
+                .build());
+
         CommandLineParser parser = new DefaultParser();
         try {
             CommandLine cmd = parser.parse(options, args);
@@ -164,6 +178,20 @@ public class SetupOptions {
             if(cmd.hasOption("max-repl-backlog")) {
                 maxReplBacklog = Integer.parseInt(cmd.getOptionValue("max-repl-backlog"));
                 log.info("Max replication backlog specified: {}", maxReplBacklog);
+            }
+
+            if (cmd.hasOption("node-id")) {
+                nodeId = cmd.getOptionValue("node-id");
+                log.info("Node id specified: {}", nodeId);
+            }
+
+            if (cmd.hasOption("cluster")) {
+                cluster = cmd.getOptionValue("cluster");
+                log.info("Cluster specified: {}", cluster);
+            }
+
+            if (cluster != null && nodeId == null) {
+                throw new ParseException("--cluster requires --node-id");
             }
 
         } catch (ParseException e) {

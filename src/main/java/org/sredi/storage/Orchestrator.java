@@ -9,6 +9,7 @@ import org.sredi.commands.EofCommand;
 import org.sredi.commands.PsyncCommand;
 import org.sredi.commands.TerminateCommand;
 import org.sredi.constants.ReplicationConstants;
+import org.sredi.election.RoleSwitcher;
 import org.sredi.replication.ClientConnection;
 import org.sredi.replication.ConnectionManager;
 import org.sredi.replication.FollowerSubsystem;
@@ -40,7 +41,7 @@ import java.util.concurrent.*;
  * can change at runtime (e.g. after a leader election).
  */
 
-public class Orchestrator implements ReplicationServiceInfoProvider {
+public class Orchestrator implements ReplicationServiceInfoProvider, RoleSwitcher {
     private static final Logger log = LoggerFactory.getLogger(Orchestrator.class);
 
     private static final Set<String> DEFAULT_INFO_SECTIONS = Set.of("server", "replication", "stats", "replication-graph");
